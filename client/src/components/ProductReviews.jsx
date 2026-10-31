@@ -1,35 +1,19 @@
 import { CheckCircle2, Star } from "lucide-react";
 import { useMemo, useState } from "react";
 
-const SAMPLE_REVIEWS = [
-  { rating: 5, name: "Amina K.", title: "Beautiful quality", body: "The fabric feels lovely and the finish is neat. It looks just as elegant in person.", verified: true },
-  { rating: 5, name: "Sana R.", title: "A lovely addition", body: "The style is graceful and comfortable to wear. I am very happy with this purchase.", verified: true },
-  { rating: 4, name: "Mariam H.", title: "Lovely, with a little room to improve", body: "The design is beautiful and the material is comfortable. Delivery took a little longer than expected.", verified: true },
-  { rating: 5, name: "Noor A.", title: "Exactly what I wanted", body: "The details are delicate and the fit is comfortable. I would happily recommend it.", verified: false },
-  { rating: 3, name: "Hiba M.", title: "Nice design", body: "The design is very nice. The material was lighter than I expected, but it is still pleasant to wear.", verified: true },
-  { rating: 4, name: "Zara F.", title: "Comfortable and elegant", body: "It is easy to wear for a full day and the colour is lovely. Good value overall.", verified: true },
-  { rating: 5, name: "Leena S.", title: "A new favourite", body: "The product feels thoughtfully made and pairs easily with my other pieces.", verified: true },
-  { rating: 2, name: "Farah D.", title: "Not quite right for me", body: "The item is attractive, but the fit was not what I expected. The return process was straightforward.", verified: false },
-  { rating: 1, name: "Nadia T.", title: "Disappointed", body: "The product did not suit me as well as I hoped. The photos were helpful, but the fit was different in person.", verified: true },
-  { rating: 5, name: "Yasmin B.", title: "Wonderful purchase", body: "Beautifully presented and comfortable. I am pleased with the quality and would order again.", verified: true },
-];
-
 function getReviews(product) {
-  const key = String(product?._id || product?.name || "product");
-  const offset = [...key].reduce((total, char) => total + char.charCodeAt(0), 0) % SAMPLE_REVIEWS.length;
   const now = new Date();
-
-  return SAMPLE_REVIEWS.map((review, index) => {
-    const sourceIndex = (index + offset) % SAMPLE_REVIEWS.length;
-    const daysAgo = ((index * 13 + offset * 3) % 150) + 1;
-    const date = new Date(now);
-    date.setDate(now.getDate() - daysAgo);
-
+  return (product?.reviews || []).map((review, index) => {
+    const date = review.created_at ? new Date(review.created_at) : new Date();
+    const validDate = Number.isNaN(date.getTime()) ? new Date() : date;
     return {
-      ...SAMPLE_REVIEWS[sourceIndex],
-      id: `${key}-${sourceIndex}`,
-      date,
-      daysAgo,
+      ...review,
+      id: review.id || `${product?._id || "product"}-review-${index}`,
+      name: review.name || "Customer",
+      date: validDate,
+      daysAgo: Math.max(0, (now.getTime() - validDate.getTime()) / 86400000),
+      verified: Boolean(review.verified),
+      is_sample: Boolean(review.is_sample),
     };
   });
 }
@@ -53,8 +37,10 @@ export default function ProductReviews({ product }) {
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [pageSize, setPageSize] = useState(5);
   const [page, setPage] = useState(1);
-  const reviews = useMemo(() => getReviews(product), [product?._id, product?.name]);
-  const averageRating = reviews.reduce((total, review) => total + review.rating, 0) / reviews.length;
+  const reviews = useMemo(() => getReviews(product), [product?._id, product?.name, product?.reviews]);
+  const averageRating = reviews.length
+    ? reviews.reduce((total, review) => total + review.rating, 0) / reviews.length
+    : 0;
   const ratingCounts = [5, 4, 3, 2, 1].reduce((counts, rating) => {
     counts[rating] = reviews.filter((review) => review.rating === rating).length;
     return counts;
@@ -80,12 +66,12 @@ export default function ProductReviews({ product }) {
           <h2 id="product-reviews-heading" className="mt-2 text-3xl font-serif font-light text-stone-900">
             Product reviews
           </h2>
-          <p className="mt-2 text-xs text-stone-500">Sample reviews for display purposes</p>
+          <p className="mt-2 text-xs text-stone-500">Customer reviews</p>
         </div>
         <div className="flex items-center gap-3">
           <RatingStars rating={Math.round(averageRating)} size="w-5 h-5" />
           <span className="text-2xl font-semibold text-stone-900">{averageRating.toFixed(1)}</span>
-          <span className="text-sm text-stone-500">({reviews.length} sample reviews)</span>
+          <span className="text-sm text-stone-500">({reviews.length} customer reviews)</span>
         </div>
       </div>
 
@@ -143,6 +129,7 @@ export default function ProductReviews({ product }) {
             <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600">{review.body}</p>
             <div className="mt-3 flex items-center gap-2 text-xs text-stone-500">
               <span>{review.name}</span>
+              {review.is_sample && <span className="text-stone-400">Sample review</span>}
               {review.verified && (
                 <span className="inline-flex items-center gap-1 text-emerald-700">
                   <CheckCircle2 className="h-3.5 w-3.5" /> Verified purchase
@@ -152,7 +139,9 @@ export default function ProductReviews({ product }) {
           </article>
         ))}
         {filteredReviews.length === 0 && (
-          <p className="py-10 text-center text-sm text-stone-500">No reviews match these filters.</p>
+          <p className="py-10 text-center text-sm text-stone-500">
+            {reviews.length === 0 ? "There are no reviews for this product yet." : "No reviews match these filters."}
+          </p>
         )}
       </div>
 

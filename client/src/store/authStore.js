@@ -1,5 +1,6 @@
 import api from '../api/axios';
 import { create } from 'zustand';
+import useCartStore from './cartStore';
 
 const useAuthStore = create((set) => ({
   user: null,
@@ -11,6 +12,7 @@ const useAuthStore = create((set) => ({
       const { data } = await api.get('/auth/me');
       set({ user: data.user, loading: false, error: null });
     } catch (err) {
+      useCartStore.getState().resetCart();
       set({ user: null, loading: false, error: null });
     }
   },
@@ -57,6 +59,8 @@ const useAuthStore = create((set) => ({
   setError: (error) => set({ error }),
 
   logout: async () => {
+    set({ user: null, error: null });
+    useCartStore.getState().resetCart();
     try {
       await api.post('/auth/logout');
     } catch {

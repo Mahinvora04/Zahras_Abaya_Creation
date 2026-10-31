@@ -139,7 +139,6 @@ export default function Products() {
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= pagination.totalPages) {
       updateFilters({ page: newPage });
-      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 

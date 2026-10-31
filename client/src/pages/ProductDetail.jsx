@@ -17,14 +17,14 @@ import ProductReviews from "../components/ProductReviews";
 
 // Main component handles fetching and loading states
 export default function ProductDetail() {
-  const { id } = useParams();
+  const { slug } = useParams();
   const { currentProduct, fetchProduct, loading } = useProductStore();
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchProduct(id);
+    fetchProduct(slug);
     return () => useProductStore.getState().clearCurrent();
-  }, [id, fetchProduct]);
+  }, [slug, fetchProduct]);
 
   if (loading) {
     return (
@@ -64,6 +64,7 @@ function ProductDetailInner({ product }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuthStore();
+  const cartItems = useCartStore((state) => state.items);
 
   // ✅ Safely find the first available variant for initial state
   const firstVariant =
@@ -75,12 +76,10 @@ function ProductDetailInner({ product }) {
     firstVariant?.color || null,
   );
   const [selectedSize, setSelectedSize] = useState(firstVariant?.size || null);
-  const [quantity, setQuantity] = useState(1);
   const [mainImage, setMainImage] = useState(
     firstVariant?.images?.[0] || "",
   );
   const [isAdding, setIsAdding] = useState(false);
-  const [addedToCart, setAddedToCart] = useState(false);
 
   const isObjectId = (str) =>
     typeof str === "string" && /^[0-9a-fA-F]{24}$/.test(str);
@@ -92,14 +91,37 @@ function ProductDetailInner({ product }) {
         (v) => v.color === selectedColor && v.size === selectedSize,
       )
     : null;
-  const selectedImages = selectedVariant?.images || [];
 
-  const displayPrice = selectedVariant?.price ?? 0;
-  const displayOriginalPrice = selectedVariant?.originalPrice;
-  const discount = displayOriginalPrice > displayPrice
-    ? Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100)
+  const displayPrice = selectedVariant?.price ?? product.price;
+  const displayOriginalPrice =
+    selectedVariant?.originalPrice ?? product.originalPrice;
+  const selectedImages =
+    selectedVariant?.images?.length > 0
+      ? selectedVariant.images
+      : product.images || [];
+  const discount =
+    displayOriginalPrice > displayPrice
+      ? Math.round(
+          ((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100,
+        )
+      : 0;
+  const isOutOfStock = selectedVariant
+    ? selectedVariant.isAvailable === false
+    : product.isAvailable === false || product.stock === 0;
+  const productReviews = product.reviews || [];
+  const reviewCount = productReviews.length;
+  const reviewRating = reviewCount
+    ? productReviews.reduce((total, review) => total + Number(review.rating || 0), 0) / reviewCount
     : 0;
-  const isOutOfStock = !selectedVariant?.isAvailable;
+  const selectedCartItem = cartItems.find((item) => {
+    if (item.product_id !== product._id) return false;
+    if (!selectedVariant) return !item.variant_id && !item.selectedVariant;
+    return selectedVariant.variant_id
+      ? item.variant_id === selectedVariant.variant_id
+      : item.selectedVariant?.color === selectedVariant.color &&
+          item.selectedVariant?.size === selectedVariant.size;
+  });
+  const quantityInCart = Number(selectedCartItem?.quantity) || 0;
 
   const availableColors = hasVariants
     ? [
@@ -135,27 +157,26 @@ function ProductDetailInner({ product }) {
     }
   };
 
-  const handleAddToCart = async () => {
+  const changeCartQuantity = async (change) => {
     if (!user) {
       navigate("/login", { state: { from: location.pathname } });
       return;
     }
 
-    if (isOutOfStock) return;
+    if (change > 0 && isOutOfStock) return;
 
     if (hasVariants && !selectedSize) {
       alert("Please select a size before adding to cart.");
       return;
     }
+    if (change < 0 && quantityInCart === 0) return;
 
     setIsAdding(true);
-    setAddedToCart(false);
-
     const cartItem = {
       _id: product._id,
       name: product.name,
       price: displayPrice,
-      images: selectedImages,
+      images: selectedVariant?.images || product.images,
       selectedVariant: selectedVariant
         ? {
             variant_id: selectedVariant.variant_id,
@@ -163,18 +184,27 @@ function ProductDetailInner({ product }) {
             size: selectedVariant.size,
             sku: selectedVariant.sku,
             price: selectedVariant.price,
+            originalPrice: selectedVariant.originalPrice,
+            images: selectedVariant.images,
           }
         : null,
     };
 
-    const res = await useCartStore.getState().addItem(cartItem, quantity);
-
-    setIsAdding(false);
-    if (res.success) {
-      setAddedToCart(true);
-      window.setTimeout(() => setAddedToCart(false), 2000);
+    const cartStore = useCartStore.getState();
+    if (change > 0 && quantityInCart === 0) {
+      await cartStore.addItem(cartItem, 1);
+    } else {
+      await cartStore.updateQty(
+        product._id,
+        selectedVariant?.variant_id,
+        quantityInCart + change,
+      );
     }
+    setIsAdding(false);
   };
+
+  const handleAddToCart = () =>
+    quantityInCart === 0 ? changeCartQuantity(1) : undefined;
 
   return (
     <div className="bg-stone-50 min-h-screen pb-20">
@@ -252,7 +282,7 @@ function ProductDetailInner({ product }) {
                   <Star
                     key={i}
                     className={`w-4 h-4 ${
-                      i < Math.floor(product.rating || 5)
+                      i < Math.floor(reviewRating)
                         ? "fill-current"
                         : "text-stone-300"
                     }`}
@@ -260,10 +290,10 @@ function ProductDetailInner({ product }) {
                 ))}
               </div>
               <span className="text-sm text-stone-600 font-medium">
-                {product.rating || "5.0"}
+                {reviewRating.toFixed(1)}
               </span>
               <span className="text-sm text-stone-400">
-                ({product.numReviews || 0} Reviews)
+                ({reviewCount} Reviews)
               </span>
             </div>
 
@@ -357,16 +387,18 @@ function ProductDetailInner({ product }) {
             <div className="flex flex-col sm:flex-row gap-4 mb-10">
               <div className="flex items-center border border-stone-300 rounded-sm w-max">
                 <button
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  onClick={() => changeCartQuantity(-1)}
+                  disabled={quantityInCart === 0 || isAdding}
                   className="p-3 text-stone-600 hover:bg-stone-100 transition-colors"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
                 <span className="w-12 text-center font-medium text-stone-900">
-                  {quantity}
+                  {quantityInCart}
                 </span>
                 <button
-                  onClick={() => setQuantity(quantity + 1)}
+                  onClick={() => changeCartQuantity(1)}
+                  disabled={isOutOfStock || isAdding}
                   className="p-3 text-stone-600 hover:bg-stone-100 transition-colors"
                 >
                   <Plus className="w-4 h-4" />
@@ -378,10 +410,11 @@ function ProductDetailInner({ product }) {
                 disabled={
                   isOutOfStock ||
                   (hasVariants && !selectedSize) ||
-                  isAdding
+                  isAdding ||
+                  quantityInCart > 0
                 }
                 className={`flex-1 py-3.5 px-6 rounded-sm text-sm font-semibold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
-                  isOutOfStock ||
+                  isOutOfStock || quantityInCart > 0 ||
                   (hasVariants && !selectedSize)
                     ? "bg-stone-200 text-stone-400 cursor-not-allowed"
                     : isAdding
@@ -390,11 +423,11 @@ function ProductDetailInner({ product }) {
                 }`}
               >
                 <ShoppingBag className="w-4 h-4" />
-                {isAdding
-                  ? "Adding to Bag..."
-                  : addedToCart
-                    ? "Added to Bag"
-                    : "Add to Bag"}
+                {quantityInCart > 0
+                  ? "Already in Cart"
+                  : isAdding
+                    ? "Adding to Bag..."
+                    : "Add to Cart"}
               </button>
             </div>
 
@@ -403,7 +436,7 @@ function ProductDetailInner({ product }) {
                 Description
               </h3>
               <p className="text-stone-600 leading-relaxed font-light">
-                {selectedVariant?.description}
+                {selectedVariant?.description || product.description}
               </p>
             </div>
 

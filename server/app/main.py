@@ -1,5 +1,6 @@
 import os
 import re
+import unicodedata
 import logging
 from datetime import datetime, timedelta
 from google.auth.exceptions import GoogleAuthError
@@ -30,6 +31,21 @@ async def ensure_google_subject_index():
         unique=True,
         partialFilterExpression={"google_sub": {"$type": "string"}},
     )
+    await db.product_reviews.create_index("product_id")
+    used_slugs = set()
+    async for product in db.products.find({}, {"name": 1, "slug": 1}).sort("_id", 1):
+        base_slug = slugify_product_name(product.get("name", ""))
+        if not base_slug:
+            continue
+        slug = base_slug
+        suffix = 2
+        while slug in used_slugs:
+            slug = f"{base_slug}-{suffix}"
+            suffix += 1
+        used_slugs.add(slug)
+        if product.get("slug") != slug:
+            await db.products.update_one({"_id": product["_id"]}, {"$set": {"slug": slug}})
+    await db.products.create_index("slug", unique=True, sparse=True)
 
 # CORS
 cors_origins = [
@@ -133,6 +149,27 @@ def serialize_user(user: dict) -> dict:
         result.pop("google_sub", None)
     return result
 
+def slugify_product_name(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    normalized = normalized.encode("ascii", "ignore").decode("ascii").lower()
+    normalized = normalized.replace("&", " and ")
+    return re.sub(r"[^a-z0-9]+", "-", normalized).strip("-")
+
+async def get_unique_product_slug(name: str, exclude_id: Optional[ObjectId] = None) -> str:
+    base_slug = slugify_product_name(name)
+    if not base_slug:
+        raise HTTPException(status_code=400, detail="Product name must contain letters or numbers")
+    candidate = base_slug
+    suffix = 2
+    query = {"slug": candidate}
+    if exclude_id is not None:
+        query["_id"] = {"$ne": exclude_id}
+    while await db.products.find_one(query, {"_id": 1}):
+        candidate = f"{base_slug}-{suffix}"
+        suffix += 1
+        query["slug"] = candidate
+    return candidate
+
 # 2. Minimal Request Models
 class RegisterReq(BaseModel):
     name: str
@@ -199,6 +236,16 @@ class UpdateCartItemReq(BaseModel):
     quantity: Optional[int] = None
     selectedVariant: Optional[dict] = None
     variant_id: Optional[str] = None
+
+class CreateOrderReq(BaseModel):
+    address_id: str
+
+class OrderReviewReq(BaseModel):
+    product_id: str
+    variant_id: Optional[str] = None
+    rating: int = Field(ge=1, le=5)
+    title: str = Field(min_length=1, max_length=120)
+    body: str = Field(min_length=1, max_length=2000)
     
 # 3. Helper Functions
 def create_token(user_id: str):
@@ -488,13 +535,35 @@ async def get_featured():
 async def get_product(product_id: str):
     try:
         # ✅ Convert string to ObjectId before querying
-        product = await db.products.find_one({"_id": ObjectId(product_id)})
+        if ObjectId.is_valid(product_id):
+            product = await db.products.find_one({"_id": ObjectId(product_id)})
+        else:
+            product = await db.products.find_one({"slug": product_id})
     except:
         # Invalid ObjectId format
         raise HTTPException(status_code=404, detail="Product not found")
     
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+
+    product_id = str(product["_id"])
+    product_review_docs = await db.product_reviews.find(
+        {"product_id": product_id},
+        {"product_id": 1, "variant_id": 1, "rating": 1, "title": 1, "body": 1, "reviewer_name": 1, "created_at": 1, "verified": 1, "is_sample": 1},
+    ).sort("created_at", -1).to_list(length=5000)
+    product_reviews = []
+    for review in product_review_docs:
+        product_reviews.append({
+            "id": str(review["_id"]),
+            "rating": review.get("rating", 5),
+            "title": review.get("title", ""),
+            "body": review.get("body", ""),
+            "name": review.get("reviewer_name", "Customer"),
+            "created_at": review.get("created_at"),
+            "verified": review.get("verified", True),
+            "is_sample": review.get("is_sample", False),
+        })
+    product["reviews"] = product_reviews
     
     return {"success": True, "product": serialize_doc(product)}
 
@@ -502,6 +571,7 @@ async def get_product(product_id: str):
 @app.post("/api/admin/products")
 async def create_product(req: ProductReq, admin: dict = Depends(get_admin_user)):
     product_doc = build_product_doc(req)
+    product_doc["slug"] = await get_unique_product_slug(product_doc["name"])
     result = await db.products.insert_one(product_doc)
     product_doc["_id"] = str(result.inserted_id)
     return {"success": True, "product": product_doc}
@@ -516,6 +586,7 @@ async def update_product(product_id: str, req: ProductReq, admin: dict = Depends
     if not existing:
         raise HTTPException(status_code=404, detail="Product not found")
     product_doc = build_product_doc(req, existing)
+    product_doc["slug"] = await get_unique_product_slug(product_doc["name"], object_id)
     await db.products.update_one({"_id": object_id}, {"$set": product_doc})
     updated = await db.products.find_one({"_id": object_id})
     return {"success": True, "product": serialize_doc(updated)}
@@ -858,3 +929,164 @@ async def clear_cart(
     )
     
     return {"success": True, "message": "Cart cleared"}
+
+# ==========================================
+# ORDERS & ORDER REVIEWS (Protected)
+# ==========================================
+
+@app.post("/api/orders", status_code=201)
+async def create_order(req: CreateOrderReq, current_user: dict = Depends(get_current_user)):
+    user_id = ObjectId(current_user["_id"])
+    user = await db.users.find_one({"_id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    address = next((address for address in user.get("addresses", [])
+        if str(address.get("_id")) == req.address_id), None)
+    if not address:
+        raise HTTPException(status_code=400, detail="Choose a saved delivery address")
+    if not user.get("phone"):
+        raise HTTPException(status_code=400, detail="Add a phone number before placing an order")
+
+    cart = await db.carts.find_one({"user_id": user_id})
+    if not cart or not cart.get("items"):
+        raise HTTPException(status_code=400, detail="Your cart is empty")
+
+    order_items = []
+    subtotal = 0
+    for cart_item in cart["items"]:
+        try:
+            product = await db.products.find_one({"_id": ObjectId(cart_item["product_id"])})
+        except Exception:
+            product = None
+        if not product:
+            raise HTTPException(status_code=400, detail="A product in your cart is no longer available")
+
+        variant_id = cart_item.get("variant_id") or (cart_item.get("selectedVariant") or {}).get("variant_id")
+        variant = next((value for value in product.get("variants", [])
+            if variant_id and value.get("variant_id") == variant_id), None)
+        if variant is None and cart_item.get("selectedVariant"):
+            selected = cart_item["selectedVariant"]
+            variant = next((value for value in product.get("variants", [])
+                if value.get("color") == selected.get("color") and
+                value.get("size") == selected.get("size")), None)
+        if product.get("variants") and not variant:
+            raise HTTPException(status_code=400, detail=f"Choose an available variant for {product.get('name', 'a product')}")
+        if variant and not variant.get("isAvailable", True):
+            raise HTTPException(status_code=409, detail=f"{product.get('name', 'A product')} is no longer available")
+
+        quantity = max(1, int(cart_item.get("quantity", 1)))
+        selected_variant = variant or cart_item.get("selectedVariant") or {}
+        unit_price = selected_variant.get("price", product.get("price", 0))
+        line_total = unit_price * quantity
+        subtotal += line_total
+        order_items.append({
+            "product_id": str(product["_id"]),
+            "product_name": product.get("name", "Product"),
+            "variant_id": selected_variant.get("variant_id"),
+            "color": selected_variant.get("color"),
+            "size": selected_variant.get("size"),
+            "sku": selected_variant.get("sku"),
+            "description": selected_variant.get("description", product.get("description")),
+            "price": unit_price,
+            "quantity": quantity,
+            "line_total": line_total,
+            "images": selected_variant.get("images", product.get("images", [])),
+            "review": None,
+        })
+
+    shipping_fee = 99
+    now = datetime.utcnow()
+    order_doc = {
+        "order_number": f"ZAH-{now.strftime('%Y%m%d')}-{uuid4().hex[:6].upper()}",
+        "user_id": user_id,
+        "items": order_items,
+        "shipping_address": serialize_doc(address),
+        "phone": user["phone"],
+        "subtotal": subtotal,
+        "shipping_fee": shipping_fee,
+        "total": subtotal + shipping_fee,
+        "status": "confirmed",
+        "payment_status": "pending",
+        "created_at": now,
+        "updated_at": now,
+    }
+    result = await db.orders.insert_one(order_doc)
+    order_doc["_id"] = result.inserted_id
+    await db.carts.update_one(
+        {"_id": cart["_id"]},
+        {"$set": {"items": [], "updated_at": datetime.utcnow()}},
+    )
+    return {"success": True, "order": serialize_doc(order_doc)}
+
+
+@app.get("/api/orders")
+async def get_orders(current_user: dict = Depends(get_current_user)):
+    orders = await db.orders.find({"user_id": ObjectId(current_user["_id"])}).sort("created_at", -1).to_list(length=100)
+    return {"success": True, "orders": [serialize_doc(order) for order in orders]}
+
+
+@app.get("/api/orders/{order_id}")
+async def get_order(order_id: str, current_user: dict = Depends(get_current_user)):
+    try:
+        order_object_id = ObjectId(order_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Order not found")
+    order = await db.orders.find_one({"_id": order_object_id, "user_id": ObjectId(current_user["_id"])})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return {"success": True, "order": serialize_doc(order)}
+
+
+@app.put("/api/orders/{order_id}/reviews")
+async def save_order_review(
+    order_id: str,
+    req: OrderReviewReq,
+    current_user: dict = Depends(get_current_user),
+):
+    try:
+        order_object_id = ObjectId(order_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Order not found")
+    user_id = ObjectId(current_user["_id"])
+    order = await db.orders.find_one({"_id": order_object_id, "user_id": user_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if str(order.get("status", "")).strip().lower() != "delivered":
+        raise HTTPException(status_code=409, detail="You can review products after the order has been delivered")
+
+    order_item = next((item for item in order.get("items", [])
+        if item.get("product_id") == req.product_id and item.get("variant_id") == req.variant_id), None)
+    if not order_item:
+        raise HTTPException(status_code=400, detail="This product is not part of the order")
+
+    now = datetime.utcnow()
+    previous_review = order_item.get("review") or {}
+    review = {
+        "rating": req.rating,
+        "title": req.title.strip(),
+        "body": req.body.strip(),
+        "reviewer_name": current_user.get("name", "Customer"),
+        "verified": True,
+        "created_at": previous_review.get("created_at", now),
+        "updated_at": now,
+    }
+    order_item["review"] = review
+    review_id = f"{order_object_id}:{req.product_id}:{req.variant_id or 'no-variant'}"
+    await db.product_reviews.replace_one(
+        {"_id": review_id},
+        {
+            "_id": review_id,
+            "product_id": req.product_id,
+            "variant_id": req.variant_id,
+            "order_id": order_object_id,
+            "user_id": user_id,
+            **review,
+        },
+        upsert=True,
+    )
+    await db.orders.update_one(
+        {"_id": order_object_id, "user_id": user_id},
+        {"$set": {"items": order["items"], "updated_at": now}},
+    )
+    return {"success": True, "review": serialize_doc(review)}

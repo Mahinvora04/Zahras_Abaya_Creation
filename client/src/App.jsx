@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import About from "./pages/About";
 import AdminDashboard from "./pages/admin/Dashboard";
@@ -12,12 +12,34 @@ import Navbar from "./components/Navbar";
 import ProductDetail from "./pages/ProductDetail";
 import ProductForm from "./pages/admin/ProductForm";
 import Products from "./pages/Products";
+import OrderDetails from "./pages/OrderDetails";
+import OrderHistory from "./pages/OrderHistory";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Register from "./pages/Register";
 import useAuthStore from "./store/authStore";
 import useCartStore from "./store/cartStore";
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
+
+function ScrollToTop() {
+  const { pathname, search } = useLocation();
+
+  useLayoutEffect(() => {
+    window.history.scrollRestoration = "manual";
+
+    const scrollToTop = () => {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+
+    scrollToTop();
+    const frame = window.requestAnimationFrame(scrollToTop);
+    return () => window.cancelAnimationFrame(frame);
+  }, [pathname, search]);
+
+  return null;
+}
 
 export default function App() {
   const { loadUser, user } = useAuthStore();
@@ -35,6 +57,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         {/* Admin routes — no Navbar */}
         <Route
@@ -82,7 +105,23 @@ export default function App() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/products" element={<Products />} />
-                <Route path="/product/:id" element={<ProductDetail />} />
+                <Route path="/product/:slug" element={<ProductDetail />} />
+                <Route
+                  path="/orders"
+                  element={
+                    <ProtectedRoute>
+                      <OrderHistory />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/orders/:id"
+                  element={
+                    <ProtectedRoute>
+                      <OrderDetails />
+                    </ProtectedRoute>
+                  }
+                />
 
                 {/* ✅ UPDATED: Cart is now protected */}
                 <Route

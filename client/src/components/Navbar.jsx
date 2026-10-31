@@ -97,7 +97,7 @@ export default function Navbar() {
                 aria-label="Shopping Cart"
               >
                 <ShoppingBag className="w-5 h-5 stroke-[1.5]" />
-                {count > 0 && (
+                {user && count > 0 && (
                   <span className="absolute top-1 right-0 bg-amber-600 text-white text-[10px] font-semibold w-4 h-4 rounded-full flex items-center justify-center shadow-sm">
                     {count}
                   </span>
@@ -152,7 +152,16 @@ export default function Navbar() {
                         className="flex items-center gap-2.5 px-4 py-2.5 text-xs text-stone-300 hover:bg-stone-800 transition-colors"
                       >
                         <User className="w-4 h-4 text-stone-400" />
-                        <span>My Account & Orders</span>
+                        <span>My Profile</span>
+                      </Link>
+
+                      <Link
+                        to="/orders"
+                        onClick={() => setUserDropdownOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-2.5 text-xs text-stone-300 hover:bg-stone-800 transition-colors"
+                      >
+                        <ShoppingBag className="w-4 h-4 text-stone-400" />
+                        <span>Order History</span>
                       </Link>
 
                       <button
@@ -239,6 +248,25 @@ export default function Navbar() {
               Kaftans
             </Link>
           </nav>
+
+          {user && (
+            <div className="border-t border-stone-800 pt-4 flex flex-col gap-4">
+              <Link
+                to="/profile"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-sm font-medium uppercase tracking-wider text-stone-200 hover:text-amber-300"
+              >
+                My Profile
+              </Link>
+              <Link
+                to="/orders"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-sm font-medium uppercase tracking-wider text-stone-200 hover:text-amber-300"
+              >
+                Order History
+              </Link>
+            </div>
+          )}
 
           {!user && (
             <div className="pt-4 border-t border-stone-800 flex flex-col gap-2">

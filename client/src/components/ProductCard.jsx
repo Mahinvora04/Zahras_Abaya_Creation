@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import useAuthStore from '../store/authStore';
 import useCartStore from '../store/cartStore';
+import { getProductSlug } from '../utils/productSlug';
 
 export default function ProductCard({ product }) {
   const addItem = useCartStore((s) => s.addItem);
@@ -12,6 +13,7 @@ export default function ProductCard({ product }) {
   const location = useLocation();
 
   if (!product) return null;
+  const productSlug = getProductSlug(product);
 
   const defaultVariant =
     product.variants?.find((variant) => variant.variant_id === product.defaultVariantId) ||
@@ -20,8 +22,10 @@ export default function ProductCard({ product }) {
   const variantImages = defaultVariant?.images || [];
   const mainImage = variantImages[0] || '/images/placeholder.jpg';
   const secondaryImage = variantImages[1] || mainImage;
-  const discount = defaultVariant?.originalPrice > defaultVariant?.price
-    ? Math.round(((defaultVariant.originalPrice - defaultVariant.price) / defaultVariant.originalPrice) * 100)
+  const displayPrice = defaultVariant?.price;
+  const displayOriginalPrice = defaultVariant?.originalPrice;
+  const displayDiscount = displayOriginalPrice > displayPrice
+    ? Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100)
     : 0;
 
   // ✅ Get the default variant (first one)
@@ -61,7 +65,7 @@ export default function ProductCard({ product }) {
     const itemToAdd = {
       _id: product._id,
       name: product.name,
-      price: defaultVariant?.price,
+      price: displayPrice,
       images: variantImages,
       selectedVariant: defaultVariant ? {
         variant_id: defaultVariant.variant_id,
@@ -85,7 +89,7 @@ export default function ProductCard({ product }) {
       <div>
         {/* Image Container with Dual Image Swap */}
         <div className="relative aspect-[3/4] w-full overflow-hidden bg-stone-100">
-          <Link to={`/product/${product._id}`} className="block w-full h-full">
+          <Link to={`/product/${productSlug}`} className="block w-full h-full">
             <img
               src={mainImage}
               alt={product.name}
@@ -104,9 +108,9 @@ export default function ProductCard({ product }) {
 
           {/* Badges */}
           <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
-            {discount > 0 && (
+            {displayDiscount > 0 && (
               <span className="bg-stone-900 text-amber-200 text-[10px] font-medium tracking-widest uppercase px-2.5 py-1 shadow-sm">
-                -{discount}%
+                -{displayDiscount}%
               </span>
             )}
             {product.isNewArrival && (
@@ -119,7 +123,7 @@ export default function ProductCard({ product }) {
           {/* Quick Action Floating Icons */}
           <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
             <Link
-              to={`/product/${product._id}`}
+              to={`/product/${productSlug}`}
               aria-label="Quick View"
               className="p-2 rounded-full bg-white/90 text-stone-700 hover:bg-stone-900 hover:text-white backdrop-blur-md transition-colors shadow-sm"
             >
@@ -152,7 +156,7 @@ export default function ProductCard({ product }) {
             </span>
           )}
 
-          <Link to={`/product/${product._id}`} className="block group/title">
+          <Link to={`/product/${productSlug}`} className="block group/title">
             <h3 className="font-serif text-base text-stone-900 line-clamp-1 group-hover/title:text-amber-800 transition-colors font-medium">
               {product.name}
             </h3>
@@ -176,11 +180,11 @@ export default function ProductCard({ product }) {
       <div className="px-4 pb-4 pt-1 flex items-center justify-between border-t border-stone-100 mt-2">
         <div className="flex items-baseline gap-2">
           <span className="text-base font-semibold text-stone-900">
-            ₹{defaultVariant?.price?.toLocaleString('en-IN')}
+            ₹{displayPrice?.toLocaleString('en-IN')}
           </span>
-          {defaultVariant?.originalPrice && defaultVariant.originalPrice > defaultVariant.price && (
+          {displayOriginalPrice && displayOriginalPrice > displayPrice && (
             <span className="text-xs text-stone-400 line-through font-light">
-              ₹{defaultVariant.originalPrice?.toLocaleString('en-IN')}
+              ₹{displayOriginalPrice?.toLocaleString('en-IN')}
             </span>
           )}
         </div>

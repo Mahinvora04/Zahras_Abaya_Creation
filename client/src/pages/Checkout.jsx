@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import api from "../api/axios";
 import useAuthStore from "../store/authStore";
 import useCartStore from "../store/cartStore";
 
@@ -28,6 +29,7 @@ const EMPTY_ADDRESS = {
 };
 
 export default function Checkout() {
+  const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const updateProfile = useAuthStore((state) => state.updateProfile);
   const addAddress = useAuthStore((state) => state.addAddress);
@@ -108,9 +110,16 @@ export default function Checkout() {
       }
     }
 
-    setMessage(
-      "Your checkout details are ready. Payment gateway integration is the next step.",
-    );
+    setSaving(true);
+    try {
+      const { data } = await api.post("/orders", { address_id: selectedAddressId });
+      await useCartStore.getState().fetchCart();
+      navigate(`/orders/${data.order._id}`);
+    } catch (requestError) {
+      setError(requestError.response?.data?.detail || "Could not place this order. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!user) {
@@ -504,12 +513,11 @@ export default function Checkout() {
               disabled={saving || !selectedAddress}
               className="w-full bg-stone-900 text-stone-100 hover:bg-amber-900 py-3.5 px-4 text-xs font-medium tracking-widest uppercase transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              {saving ? "Saving details..." : "Confirm details"}
+              {saving ? "Placing order..." : "Place order"}
               <ArrowRight className="w-4 h-4" />
             </button>
             <p className="text-[10px] leading-relaxed text-stone-400 text-center">
-              Your payment will begin after a payment provider is connected and
-              your order details are securely prepared.
+              Payment is not connected yet. New orders will be saved as pending payment.
             </p>
             <Link
               to="/cart"
