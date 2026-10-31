@@ -20,8 +20,10 @@ export default function ProductCard({ product }) {
   const variantImages = defaultVariant?.images || [];
   const mainImage = variantImages[0] || '/images/placeholder.jpg';
   const secondaryImage = variantImages[1] || mainImage;
-  const discount = defaultVariant?.originalPrice > defaultVariant?.price
-    ? Math.round(((defaultVariant.originalPrice - defaultVariant.price) / defaultVariant.originalPrice) * 100)
+  const displayPrice = defaultVariant?.price;
+  const displayOriginalPrice = defaultVariant?.originalPrice;
+  const displayDiscount = displayOriginalPrice > displayPrice
+    ? Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100)
     : 0;
 
   // ✅ Get the default variant (first one)
@@ -61,7 +63,7 @@ export default function ProductCard({ product }) {
     const itemToAdd = {
       _id: product._id,
       name: product.name,
-      price: defaultVariant?.price,
+      price: displayPrice,
       images: variantImages,
       selectedVariant: defaultVariant ? {
         variant_id: defaultVariant.variant_id,
@@ -104,9 +106,9 @@ export default function ProductCard({ product }) {
 
           {/* Badges */}
           <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
-            {discount > 0 && (
+            {displayDiscount > 0 && (
               <span className="bg-stone-900 text-amber-200 text-[10px] font-medium tracking-widest uppercase px-2.5 py-1 shadow-sm">
-                -{discount}%
+                -{displayDiscount}%
               </span>
             )}
             {product.isNewArrival && (
@@ -176,11 +178,11 @@ export default function ProductCard({ product }) {
       <div className="px-4 pb-4 pt-1 flex items-center justify-between border-t border-stone-100 mt-2">
         <div className="flex items-baseline gap-2">
           <span className="text-base font-semibold text-stone-900">
-            ₹{defaultVariant?.price?.toLocaleString('en-IN')}
+            ₹{displayPrice?.toLocaleString('en-IN')}
           </span>
-          {defaultVariant?.originalPrice && defaultVariant.originalPrice > defaultVariant.price && (
+          {displayOriginalPrice && displayOriginalPrice > displayPrice && (
             <span className="text-xs text-stone-400 line-through font-light">
-              ₹{defaultVariant.originalPrice?.toLocaleString('en-IN')}
+              ₹{displayOriginalPrice?.toLocaleString('en-IN')}
             </span>
           )}
         </div>
