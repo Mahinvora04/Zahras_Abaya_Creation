@@ -19,8 +19,10 @@ export default function ProductForm() {
     originalPrice: '',
     category: 'Abaya',
     images: [''],
-    stock: '',
-    discount: '',
+    color: '',
+    colorHex: '',
+    size: '',
+    isAvailable: true,
     featured: false,
   });
   const [msg, setMsg] = useState('');
@@ -31,15 +33,18 @@ export default function ProductForm() {
       fetchProduct(id).then(() => {
         const p = useProductStore.getState().currentProduct;
         if (p) {
+          const variant = p.variants?.find((v) => v.variant_id === p.defaultVariantId) || p.variants?.[0] || {};
           setForm({
             name: p.name,
-            description: p.description,
-            price: p.price,
-            originalPrice: p.originalPrice || '',
+            description: variant.description || '',
+            price: variant.price ?? '',
+            originalPrice: variant.originalPrice || '',
             category: p.category,
-            images: p.images,
-            stock: p.stock,
-            discount: p.discount || '',
+            images: variant.images?.length ? variant.images : [''],
+            color: variant.color || '',
+            colorHex: variant.colorHex || '',
+            size: variant.size || '',
+            isAvailable: variant.isAvailable ?? true,
             featured: p.featured,
           });
         }
@@ -54,8 +59,7 @@ export default function ProductForm() {
       ...form,
       price: Number(form.price),
       originalPrice: Number(form.originalPrice) || undefined,
-      stock: Number(form.stock),
-      discount: Number(form.discount) || 0,
+      images: form.images.filter(Boolean),
     };
 
     const res = isEdit
@@ -144,12 +148,10 @@ export default function ProductForm() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Stock *</label>
+              <label className="block text-sm font-medium mb-1">Color</label>
               <input
-                required
-                type="number"
-                value={form.stock}
-                onChange={(e) => setForm({ ...form, stock: e.target.value })}
+                value={form.color}
+                onChange={(e) => setForm({ ...form, color: e.target.value })}
                 className="w-full border rounded px-3 py-2"
               />
             </div>
@@ -157,15 +159,23 @@ export default function ProductForm() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Discount %</label>
+              <label className="block text-sm font-medium mb-1">Size</label>
               <input
-                type="number"
-                value={form.discount}
-                onChange={(e) => setForm({ ...form, discount: e.target.value })}
+                value={form.size}
+                onChange={(e) => setForm({ ...form, size: e.target.value })}
                 className="w-full border rounded px-3 py-2"
               />
             </div>
-            <div className="flex items-end">
+            <div className="flex items-end gap-6">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.isAvailable}
+                  onChange={(e) => setForm({ ...form, isAvailable: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                Available
+              </label>
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
