@@ -1,0 +1,22 @@
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+
+# Local environment files; keep shareable templates
+.env
+.env.*
+!.env.example
+
+# Node dependencies and build output
+node_modules/
+dist/
+dist-ssr/
+.vite/
+
+# Logs and local OS/editor files
+*.log
+.DS_Store
+Thumbs.db

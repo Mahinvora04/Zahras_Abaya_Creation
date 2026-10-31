@@ -131,7 +131,7 @@ export default function Navbar() {
                           {user.name}
                         </p>
                         <p className="text-[11px] text-stone-400 truncate">
-                          {user.email}
+                          {user.email || user.phone}
                         </p>
                       </div>
 

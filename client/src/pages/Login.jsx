@@ -2,6 +2,7 @@ import { AlertCircle, ArrowRight, Eye, EyeOff, Loader2, Lock, Mail } from 'lucid
 import { Link, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 
+import GoogleSignInButton from '../components/GoogleSignInButton';
 import useAuthStore from '../store/authStore';
 
 export default function Login() {
@@ -52,7 +53,7 @@ export default function Login() {
 
         {/* Login Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Email Field */}
+          {/* Email field */}
           <div>
             <label className="block text-xs font-medium tracking-wider uppercase text-stone-700 mb-2">
               Email Address
@@ -61,6 +62,7 @@ export default function Login() {
               <input
                 type="email"
                 required
+                autoComplete="username"
                 placeholder="name@example.com"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -122,6 +124,13 @@ export default function Login() {
             )}
           </button>
         </form>
+
+        <div className="mt-6 flex items-center gap-3 text-[10px] uppercase tracking-widest text-stone-400">
+          <span className="h-px flex-1 bg-stone-200" />
+          <span>Or continue with</span>
+          <span className="h-px flex-1 bg-stone-200" />
+        </div>
+        <GoogleSignInButton />
 
         {/* Footer Link */}
         <div className="mt-8 pt-6 border-t border-stone-100 text-center">
