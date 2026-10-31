@@ -28,10 +28,10 @@ const useAuthStore = create((set) => ({
     }
   },
 
-  register: async (name, email, password) => {
+  register: async (name, email, password, phone) => {
     set({ error: null });
     try {
-      const { data } = await api.post('/auth/register', { name, email, password });
+      const { data } = await api.post('/auth/register', { name, email, password, phone });
       set({ user: data.user, error: null });
       return { success: true };
     } catch (err) {
@@ -40,6 +40,21 @@ const useAuthStore = create((set) => ({
       return { success: false, message: msg };
     }
   },
+
+  googleLogin: async (credential) => {
+    set({ error: null });
+    try {
+      const { data } = await api.post('/auth/google', { credential });
+      set({ user: data.user, error: null });
+      return { success: true };
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Google sign-in failed';
+      set({ error: msg });
+      return { success: false, message: msg };
+    }
+  },
+
+  setError: (error) => set({ error }),
 
   logout: async () => {
     try {
