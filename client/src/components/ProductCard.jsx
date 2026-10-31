@@ -13,11 +13,20 @@ export default function ProductCard({ product }) {
 
   if (!product) return null;
 
-  const mainImage = product.images?.[0] || '/images/placeholder.jpg';
-  const secondaryImage = product.images?.[1] || mainImage;
+  const defaultVariant =
+    product.variants?.find((variant) => variant.variant_id === product.defaultVariantId) ||
+    product.variants?.[0] ||
+    null;
+  const variantImages = defaultVariant?.images || [];
+  const mainImage = variantImages[0] || '/images/placeholder.jpg';
+  const secondaryImage = variantImages[1] || mainImage;
+  const displayPrice = defaultVariant?.price;
+  const displayOriginalPrice = defaultVariant?.originalPrice;
+  const displayDiscount = displayOriginalPrice > displayPrice
+    ? Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100)
+    : 0;
 
   // ✅ Get the default variant (first one)
-  const defaultVariant = product.variants?.[0] || null;
   
   // ✅ Check if the DEFAULT variant is already in cart
   const defaultVariantInCart = cartItems.find(item => {
@@ -25,8 +34,7 @@ export default function ProductCard({ product }) {
     
     if (defaultVariant) {
       return (
-        item.selectedVariant?.color === defaultVariant.color &&
-        item.selectedVariant?.size === defaultVariant.size
+        item.variant_id === defaultVariant.variant_id
       );
     }
     // If no variants, just match by product_id and null selectedVariant
@@ -54,13 +62,17 @@ export default function ProductCard({ product }) {
     const itemToAdd = {
       _id: product._id,
       name: product.name,
-      price: defaultVariant ? defaultVariant.price : product.price,
-      images: product.images,
+      price: displayPrice,
+      images: variantImages,
       selectedVariant: defaultVariant ? {
+        variant_id: defaultVariant.variant_id,
         color: defaultVariant.color,
         size: defaultVariant.size,
         sku: defaultVariant.sku,
-        price: defaultVariant.price
+        price: defaultVariant.price,
+        originalPrice: defaultVariant.originalPrice,
+        description: defaultVariant.description,
+        images: variantImages,
       } : null
     };
 
@@ -79,10 +91,10 @@ export default function ProductCard({ product }) {
               src={mainImage}
               alt={product.name}
               className={`w-full h-full object-cover object-top transition-all duration-700 ease-out group-hover:scale-105 ${
-                product.images?.[1] ? 'group-hover:opacity-0' : ''
+                variantImages[1] ? 'group-hover:opacity-0' : ''
               }`}
             />
-            {product.images?.[1] && (
+            {variantImages[1] && (
               <img
                 src={secondaryImage}
                 alt={`${product.name} alternate view`}
@@ -93,9 +105,9 @@ export default function ProductCard({ product }) {
 
           {/* Badges */}
           <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
-            {product.discount > 0 && (
+            {displayDiscount > 0 && (
               <span className="bg-stone-900 text-amber-200 text-[10px] font-medium tracking-widest uppercase px-2.5 py-1 shadow-sm">
-                -{product.discount}%
+                -{displayDiscount}%
               </span>
             )}
             {product.isNewArrival && (
@@ -164,11 +176,11 @@ export default function ProductCard({ product }) {
       <div className="px-4 pb-4 pt-1 flex items-center justify-between border-t border-stone-100 mt-2">
         <div className="flex items-baseline gap-2">
           <span className="text-base font-semibold text-stone-900">
-            ₹{product.price?.toLocaleString('en-IN')}
+            ₹{displayPrice?.toLocaleString('en-IN')}
           </span>
-          {product.originalPrice && product.originalPrice > product.price && (
+          {displayOriginalPrice && displayOriginalPrice > displayPrice && (
             <span className="text-xs text-stone-400 line-through font-light">
-              ₹{product.originalPrice?.toLocaleString('en-IN')}
+              ₹{displayOriginalPrice?.toLocaleString('en-IN')}
             </span>
           )}
         </div>
