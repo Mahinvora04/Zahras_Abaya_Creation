@@ -10,11 +10,14 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      const currentPath = window.location.pathname;
+      const currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
+      const isAdminPath = currentPath === '/admin' || currentPath.startsWith('/admin/');
+      const isAdminLogin = currentPath === '/admin/login';
       const publicPaths = ['/login', '/register', '/forgot-password', '/auth/callback'];
-      
-      // ONLY redirect if they are NOT already on a public auth page
-      if (!publicPaths.includes(currentPath)) {
+
+      if (isAdminPath && !isAdminLogin) {
+        window.location.href = '/admin/login';
+      } else if (!isAdminPath && !publicPaths.includes(currentPath)) {
         window.location.href = '/login';
       }
     }

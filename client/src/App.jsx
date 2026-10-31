@@ -2,6 +2,12 @@ import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import About from "./pages/About";
 import AdminDashboard from "./pages/admin/Dashboard";
+import AdminLogin from "./pages/admin/Login";
+import AdminOrders from "./pages/admin/Orders";
+import AdminOrderDetails from "./pages/admin/OrderDetails";
+import AdminCustomerOrders from "./pages/admin/CustomerOrders";
+import AdminCategories from "./pages/admin/Categories";
+import AdminBanners from "./pages/admin/Banners";
 import AdminProducts from "./pages/admin/Products";
 import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
@@ -41,6 +47,11 @@ function ScrollToTop() {
   return null;
 }
 
+function StoreFooter() {
+  const { pathname } = useLocation();
+  return pathname.startsWith('/admin') ? null : <Footer />;
+}
+
 export default function App() {
   const { loadUser, user } = useAuthStore();
   const { fetchCart } = useCartStore();
@@ -59,6 +70,7 @@ export default function App() {
     <BrowserRouter>
       <ScrollToTop />
       <Routes>
+        <Route path="/admin/login" element={<AdminLogin />} />
         {/* Admin routes — no Navbar */}
         <Route
           path="/admin"
@@ -76,6 +88,11 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/admin/orders" element={<ProtectedRoute adminOnly><AdminOrders /></ProtectedRoute>} />
+        <Route path="/admin/orders/:id" element={<ProtectedRoute adminOnly><AdminOrderDetails /></ProtectedRoute>} />
+        <Route path="/admin/customers/:id/orders" element={<ProtectedRoute adminOnly><AdminCustomerOrders /></ProtectedRoute>} />
+        <Route path="/admin/categories" element={<ProtectedRoute adminOnly><AdminCategories /></ProtectedRoute>} />
+        <Route path="/admin/banners" element={<ProtectedRoute adminOnly><AdminBanners /></ProtectedRoute>} />
         <Route
           path="/admin/products/new"
           element={
@@ -155,7 +172,7 @@ export default function App() {
           }
         />
       </Routes>
-      <Footer />
+      <StoreFooter />
     </BrowserRouter>
   );
 }

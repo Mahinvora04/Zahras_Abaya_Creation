@@ -50,10 +50,10 @@ const useProductStore = create((set, get) => ({
     }
   },
 
-  fetchProduct: async (id) => {
+  fetchProduct: async (id, admin = false) => {
     set({ loading: true });
     try {
-      const { data } = await api.get(`/products/${id}`);
+      const { data } = await api.get(admin ? `/admin/products/${id}` : `/products/${id}`);
       set({ currentProduct: data.product, loading: false });
     } catch (err) {
       set({ error: "Product not found", loading: false });
