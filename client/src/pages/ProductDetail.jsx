@@ -63,7 +63,6 @@ function ProductDetailInner({ product }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuthStore();
-  const cartItems = useCartStore((s) => s.items);
 
   // ✅ Safely find the first available variant for initial state
   const firstVariant =
@@ -79,6 +78,7 @@ function ProductDetailInner({ product }) {
     firstVariant?.images?.[0] || product.images?.[0] || "",
   );
   const [isAdding, setIsAdding] = useState(false);
+  const [addedToCart, setAddedToCart] = useState(false);
 
   const isObjectId = (str) =>
     typeof str === "string" && /^[0-9a-fA-F]{24}$/.test(str);
@@ -132,22 +132,6 @@ function ProductDetailInner({ product }) {
     }
   };
 
-  const selectedVariantInCart = cartItems.find((item) => {
-    if (item.product_id !== product._id) return false;
-
-    if (selectedVariant) {
-      return (
-        item.selectedVariant?.color === selectedVariant.color &&
-        item.selectedVariant?.size === selectedVariant.size
-      );
-    }
-    return !item.selectedVariant;
-  });
-
-  const totalQtyInCart = cartItems
-    .filter((item) => item.product_id === product._id)
-    .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-
   const handleAddToCart = async () => {
     if (!user) {
       navigate("/login", { state: { from: location.pathname } });
@@ -161,12 +145,8 @@ function ProductDetailInner({ product }) {
       return;
     }
 
-    if (selectedVariantInCart) {
-      navigate("/cart");
-      return;
-    }
-
     setIsAdding(true);
+    setAddedToCart(false);
 
     const cartItem = {
       _id: product._id,
@@ -175,6 +155,7 @@ function ProductDetailInner({ product }) {
       images: product.images,
       selectedVariant: selectedVariant
         ? {
+            variant_id: selectedVariant.variant_id,
             color: selectedVariant.color,
             size: selectedVariant.size,
             sku: selectedVariant.sku,
@@ -187,7 +168,8 @@ function ProductDetailInner({ product }) {
 
     setIsAdding(false);
     if (res.success) {
-      navigate("/cart");
+      setAddedToCart(true);
+      window.setTimeout(() => setAddedToCart(false), 2000);
     }
   };
 
@@ -374,7 +356,7 @@ function ProductDetailInner({ product }) {
                   <Minus className="w-4 h-4" />
                 </button>
                 <span className="w-12 text-center font-medium text-stone-900">
-                  {selectedVariantInCart ? totalQtyInCart : quantity}
+                  {quantity}
                 </span>
                 <button
                   onClick={() =>
@@ -391,13 +373,11 @@ function ProductDetailInner({ product }) {
                 disabled={
                   isOutOfStock ||
                   (hasVariants && !selectedSize) ||
-                  isAdding ||
-                  selectedVariantInCart
+                  isAdding
                 }
                 className={`flex-1 py-3.5 px-6 rounded-sm text-sm font-semibold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
                   isOutOfStock ||
-                  (hasVariants && !selectedSize) ||
-                  selectedVariantInCart
+                  (hasVariants && !selectedSize)
                     ? "bg-stone-200 text-stone-400 cursor-not-allowed"
                     : isAdding
                       ? "bg-emerald-700 text-white"
@@ -406,9 +386,9 @@ function ProductDetailInner({ product }) {
               >
                 <ShoppingBag className="w-4 h-4" />
                 {isAdding
-                  ? "Added to Bag"
-                  : selectedVariantInCart
-                    ? `In Cart (${totalQtyInCart})`
+                  ? "Adding to Bag..."
+                  : addedToCart
+                    ? "Added to Bag"
                     : "Add to Bag"}
               </button>
             </div>

@@ -100,6 +100,7 @@ class CartItem(BaseModel):
     product_id: str
     quantity: int = 1
     selectedVariant: Optional[dict] = None
+    variant_id: Optional[str] = None
 
 class Cart(BaseModel):
     user_id: str
@@ -109,6 +110,7 @@ class Cart(BaseModel):
 class UpdateCartItemReq(BaseModel):
     quantity: Optional[int] = None
     selectedVariant: Optional[dict] = None
+    variant_id: Optional[str] = None
     
 # 3. Helper Functions
 def create_token(user_id: str):
@@ -516,6 +518,21 @@ async def add_to_cart(
     product = await db.products.find_one({"_id": ObjectId(product_id)})
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+
+    variant_id = cart_item.variant_id or (cart_item.selectedVariant or {}).get("variant_id")
+    if product.get("variants"):
+        selected = next((v for v in product["variants"] if variant_id and v.get("variant_id") == variant_id), None)
+        if selected is None and cart_item.selectedVariant:
+            selected = next((v for v in product["variants"] if
+                v.get("color") == cart_item.selectedVariant.get("color") and
+                v.get("size") == cart_item.selectedVariant.get("size")), None)
+        if selected is None:
+            raise HTTPException(status_code=400, detail="A valid product variant is required")
+        variant_id = selected["variant_id"]
+        cart_item.selectedVariant = {**(cart_item.selectedVariant or {}), **selected}
+    elif variant_id:
+        raise HTTPException(status_code=400, detail="This product has no variants")
+    cart_item.variant_id = variant_id
     
     # Find or create cart
     cart = await db.carts.find_one({"user_id": ObjectId(user_id)})
@@ -543,25 +560,14 @@ async def add_to_cart(
         match_condition["selectedVariant"] = None
         
     # Check if this EXACT variant combination already exists in the cart
-    existing_item = next(
-        (item for item in cart["items"] if item["product_id"] == product_id),
-        None
-    )
+    existing_item = next((item for item in cart.get("items", [])
+        if item.get("product_id") == product_id and item.get("variant_id") == variant_id), None)
     
     # We do a manual check in Python to be 100% safe with nested dicts
-    is_exact_match = False
     if existing_item:
-        v1 = existing_item.get("selectedVariant")
-        v2 = cart_item.selectedVariant
-        if not v1 and not v2:
-            is_exact_match = True
-        elif v1 and v2 and v1.get("color") == v2.get("color") and v1.get("size") == v2.get("size"):
-            is_exact_match = True
-
-    if is_exact_match:
         # Increment quantity of the matching variant
         await db.carts.update_one(
-            {"_id": cart["_id"], "items": {"$elemMatch": match_condition}},
+            {"_id": cart["_id"], "items": {"$elemMatch": {"product_id": product_id, "variant_id": variant_id}}},
             {
                 "$inc": {"items.$.quantity": cart_item.quantity},
                 "$set": {"updated_at": datetime.utcnow()}
@@ -583,6 +589,7 @@ async def add_to_cart(
 async def update_cart_item(
     product_id: str,
     req: UpdateCartItemReq,
+    variant_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     user_id = current_user["_id"]
@@ -594,7 +601,7 @@ async def update_cart_item(
     if req.quantity is not None and req.quantity <= 0:
         await db.carts.update_one(
             {"_id": cart["_id"]},
-            {"$pull": {"items": {"product_id": product_id}}, "$set": {"updated_at": datetime.utcnow()}}
+            {"$pull": {"items": {"product_id": product_id, "variant_id": variant_id}}, "$set": {"updated_at": datetime.utcnow()}}
         )
         return {"success": True, "message": "Item removed"}
     
@@ -604,11 +611,12 @@ async def update_cart_item(
         update_doc["items.$.quantity"] = req.quantity
     if req.selectedVariant is not None:
         update_doc["items.$.selectedVariant"] = req.selectedVariant
+        update_doc["items.$.variant_id"] = req.variant_id or req.selectedVariant.get("variant_id")
         
     if update_doc:
         update_doc["updated_at"] = datetime.utcnow()
         await db.carts.update_one(
-            {"_id": cart["_id"], "items.product_id": product_id},
+            {"_id": cart["_id"], "items": {"$elemMatch": {"product_id": product_id, "variant_id": variant_id}}},
             {"$set": update_doc}
         )
         
@@ -617,6 +625,7 @@ async def update_cart_item(
 @app.delete("/api/cart/items/{product_id}")
 async def remove_from_cart(
     product_id: str,
+    variant_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     user_id = current_user["_id"]
@@ -628,7 +637,7 @@ async def remove_from_cart(
     await db.carts.update_one(
         {"_id": cart["_id"]},
         {
-            "$pull": {"items": {"product_id": product_id}},
+            "$pull": {"items": {"product_id": product_id, "variant_id": variant_id}},
             "$set": {"updated_at": datetime.utcnow()}
         }
     )

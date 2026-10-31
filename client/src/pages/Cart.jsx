@@ -74,12 +74,12 @@ export default function Cart() {
               // ✅ Safely access product data
               const product = item.product || {};
               const imageSrc = product.images?.[0] || "/images/placeholder.jpg";
-              const price = product.price || 0;
+              const price = item.selectedVariant?.price ?? product.price ?? 0;
               const quantity = item.quantity || 1;
 
               return (
                 <div
-                  key={item.product_id}
+                  key={`${item.product_id}:${item.variant_id || "none"}`}
                   className="bg-white border border-stone-200/80 p-4 sm:p-6 rounded-sm shadow-sm flex gap-5"
                 >
                   {/* Image */}
@@ -114,7 +114,7 @@ export default function Cart() {
                       <div className="flex items-center border border-stone-200 bg-stone-50 rounded-sm">
                         <button
                           onClick={() =>
-                            updateQty(item.product_id, quantity - 1)
+                            updateQty(item.product_id, item.variant_id, quantity - 1)
                           }
                           disabled={quantity <= 1}
                           className="p-2 text-stone-600 hover:text-stone-900 disabled:opacity-30"
@@ -126,7 +126,7 @@ export default function Cart() {
                         </span>
                         <button
                           onClick={() =>
-                            updateQty(item.product_id, quantity + 1)
+                            updateQty(item.product_id, item.variant_id, quantity + 1)
                           }
                           className="p-2 text-stone-600 hover:text-stone-900"
                         >
@@ -149,7 +149,7 @@ export default function Cart() {
 
                   {/* Remove Button */}
                   <button
-                    onClick={() => removeItem(item.product_id)}
+                    onClick={() => removeItem(item.product_id, item.variant_id)}
                     className="text-stone-400 hover:text-rose-700 transition-colors self-start"
                   >
                     <Trash2 className="w-4 h-4" />

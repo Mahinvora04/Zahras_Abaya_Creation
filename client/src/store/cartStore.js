@@ -29,6 +29,7 @@ const useCartStore = create((set, get) => ({
         product_id: product._id,
         quantity: Number(qty),
         selectedVariant: product.selectedVariant || null,
+        variant_id: product.variant_id || product.selectedVariant?.variant_id || null,
       });
       await get().fetchCart();
       return { success: true };
@@ -39,15 +40,15 @@ const useCartStore = create((set, get) => ({
     }
   },
 
-  updateQty: async (productId, quantity) => {
+  updateQty: async (productId, variantId, quantity) => {
     set({ loading: true, error: null });
     try {
       if (quantity <= 0) {
-        await api.delete(`/cart/items/${productId}`);
+        await api.delete(`/cart/items/${productId}`, { params: { variant_id: variantId || undefined } });
       } else {
         await api.put(`/cart/items/${productId}`, {
           quantity: Number(quantity),
-        });
+        }, { params: { variant_id: variantId || undefined } });
       }
       await get().fetchCart();
     } catch (err) {
@@ -56,10 +57,10 @@ const useCartStore = create((set, get) => ({
     }
   },
 
-  removeItem: async (productId) => {
+  removeItem: async (productId, variantId) => {
     set({ loading: true, error: null });
     try {
-      await api.delete(`/cart/items/${productId}`);
+      await api.delete(`/cart/items/${productId}`, { params: { variant_id: variantId || undefined } });
       await get().fetchCart();
     } catch (err) {
       console.error("Remove item error:", err);
@@ -92,12 +93,13 @@ const useCartStore = create((set, get) => ({
     );
   },
 
-  updateVariant: async (productId, variant) => {
+  updateVariant: async (productId, currentVariantId, variant) => {
     set({ loading: true, error: null });
     try {
       await api.put(`/cart/items/${productId}`, {
         selectedVariant: variant,
-      });
+        variant_id: variant?.variant_id || null,
+      }, { params: { variant_id: currentVariantId || undefined } });
       await get().fetchCart();
     } catch (err) {
       console.error("Update variant error:", err);
