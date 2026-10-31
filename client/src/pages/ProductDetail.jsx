@@ -13,6 +13,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import useAuthStore from "../store/authStore";
 import useCartStore from "../store/cartStore";
 import useProductStore from "../store/productStore";
+import ProductReviews from "../components/ProductReviews";
 
 // Main component handles fetching and loading states
 export default function ProductDetail() {
@@ -443,6 +444,7 @@ function ProductDetailInner({ product }) {
             </div>
           </div>
         </div>
+        <ProductReviews product={product} />
       </div>
     </div>
   );
