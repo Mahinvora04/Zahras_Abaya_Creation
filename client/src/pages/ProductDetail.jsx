@@ -1,5 +1,4 @@
 import {
-  Heart,
   Minus,
   Plus,
   RotateCcw,
@@ -15,51 +14,16 @@ import useAuthStore from "../store/authStore";
 import useCartStore from "../store/cartStore";
 import useProductStore from "../store/productStore";
 
+// Main component handles fetching and loading states
 export default function ProductDetail() {
   const { id } = useParams();
-  const navigate = useNavigate();
-  const location = useLocation();
-
   const { currentProduct, fetchProduct, loading } = useProductStore();
-  const { user } = useAuthStore();
-  const addItem = useCartStore((s) => s.addItem);
+  const navigate = useNavigate();
 
-  const [selectedColor, setSelectedColor] = useState(null);
-  const [selectedSize, setSelectedSize] = useState(null);
-  const [quantity, setQuantity] = useState(1);
-  const [mainImage, setMainImage] = useState("");
-  const [isAdding, setIsAdding] = useState(false);
-
-  // ✅ Helper to check if a string is a MongoDB ObjectId (24 hex characters)
-  const isObjectId = (str) =>
-    typeof str === "string" && /^[0-9a-fA-F]{24}$/.test(str);
-
-  // Fetch product on mount
   useEffect(() => {
     fetchProduct(id);
     return () => useProductStore.getState().clearCurrent();
-  }, [id]);
-
-  // Initialize selections when product loads
-  useEffect(() => {
-    if (currentProduct) {
-      setMainImage(currentProduct.images?.[0] || "");
-
-      if (currentProduct.variants && currentProduct.variants.length > 0) {
-        // Default to first available variant
-        const firstVariant =
-          currentProduct.variants.find((v) => v.isAvailable) ||
-          currentProduct.variants[0];
-        setSelectedColor(firstVariant.color);
-        setSelectedSize(firstVariant.size);
-
-        // If variant has specific images, show the first one
-        if (firstVariant.images && firstVariant.images.length > 0) {
-          setMainImage(firstVariant.images[0]);
-        }
-      }
-    }
-  }, [currentProduct]);
+  }, [id, fetchProduct]);
 
   if (loading) {
     return (
@@ -85,51 +49,106 @@ export default function ProductDetail() {
     );
   }
 
-  const p = currentProduct;
-  const hasVariants = p.variants && p.variants.length > 0;
+  // ✅ Render a child component with a `key`.
+  // This forces React to completely unmount and remount the component
+  // when the product changes, naturally resetting all `useState` hooks
+  // without needing any `useEffect` for initialization.
+  return (
+    <ProductDetailInner key={currentProduct._id} product={currentProduct} />
+  );
+}
 
-  // Find the currently selected variant
+// Child component handles the UI and local state
+function ProductDetailInner({ product }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuthStore();
+  const cartItems = useCartStore((s) => s.items);
+
+  // ✅ Safely find the first available variant for initial state
+  const firstVariant =
+    product.variants?.find((v) => v.isAvailable) || product.variants?.[0];
+
+  // ✅ Initialize state directly from props. No useEffect needed!
+  const [selectedColor, setSelectedColor] = useState(
+    firstVariant?.color || null,
+  );
+  const [selectedSize, setSelectedSize] = useState(firstVariant?.size || null);
+  const [quantity, setQuantity] = useState(1);
+  const [mainImage, setMainImage] = useState(
+    firstVariant?.images?.[0] || product.images?.[0] || "",
+  );
+  const [isAdding, setIsAdding] = useState(false);
+
+  const isObjectId = (str) =>
+    typeof str === "string" && /^[0-9a-fA-F]{24}$/.test(str);
+
+  const hasVariants = product.variants && product.variants.length > 0;
+
   const selectedVariant = hasVariants
-    ? p.variants.find(
+    ? product.variants.find(
         (v) => v.color === selectedColor && v.size === selectedSize,
       )
     : null;
 
-  // Dynamic price and stock based on variant (fallback to base product)
-  const displayPrice = selectedVariant?.price ?? p.price;
+  const displayPrice = selectedVariant?.price ?? product.price;
   const displayOriginalPrice = selectedVariant?.price
-    ? (selectedVariant.originalPrice ?? p.originalPrice)
-    : p.originalPrice;
-  const displayStock = selectedVariant?.stock ?? p.stock;
+    ? (selectedVariant.originalPrice ?? product.originalPrice)
+    : product.originalPrice;
+  const displayStock = selectedVariant?.stock ?? product.stock;
   const isOutOfStock = displayStock <= 0;
 
-  // Get unique available colors
   const availableColors = hasVariants
     ? [
         ...new Map(
-          p.variants.filter((v) => v.isAvailable).map((v) => [v.color, v]),
+          product.variants
+            .filter((v) => v.isAvailable)
+            .map((v) => [v.color, v]),
         ).values(),
       ]
     : [];
 
-  // Get available sizes for the SELECTED color
   const availableSizes = hasVariants
-    ? p.variants
+    ? product.variants
         .filter((v) => v.color === selectedColor && v.isAvailable)
         .map((v) => v.size)
-    : p.variantOptions?.sizes || [];
+    : product.variantOptions?.sizes || [];
 
   const handleColorSelect = (colorObj) => {
     setSelectedColor(colorObj.color);
-    setSelectedSize(null); // Reset size when color changes
+
+    const sizesForThisColor = product.variants
+      .filter((v) => v.color === colorObj.color && v.isAvailable)
+      .map((v) => v.size);
+
+    if (sizesForThisColor.length > 0) {
+      setSelectedSize(sizesForThisColor[0]);
+    }
+
     if (colorObj.images && colorObj.images.length > 0) {
       setMainImage(colorObj.images[0]);
     } else {
-      setMainImage(p.images?.[0] || "");
+      setMainImage(product.images?.[0] || "");
     }
   };
 
-  const handleAddToCart = () => {
+  const selectedVariantInCart = cartItems.find((item) => {
+    if (item.product_id !== product._id) return false;
+
+    if (selectedVariant) {
+      return (
+        item.selectedVariant?.color === selectedVariant.color &&
+        item.selectedVariant?.size === selectedVariant.size
+      );
+    }
+    return !item.selectedVariant;
+  });
+
+  const totalQtyInCart = cartItems
+    .filter((item) => item.product_id === product._id)
+    .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+
+  const handleAddToCart = async () => {
     if (!user) {
       navigate("/login", { state: { from: location.pathname } });
       return;
@@ -137,35 +156,44 @@ export default function ProductDetail() {
 
     if (isOutOfStock) return;
 
+    if (hasVariants && !selectedSize) {
+      alert("Please select a size before adding to cart.");
+      return;
+    }
+
+    if (selectedVariantInCart) {
+      navigate("/cart");
+      return;
+    }
+
     setIsAdding(true);
 
-    // Create cart item with variant details
     const cartItem = {
-      ...p,
+      _id: product._id,
+      name: product.name,
+      price: displayPrice,
+      images: product.images,
       selectedVariant: selectedVariant
         ? {
             color: selectedVariant.color,
             size: selectedVariant.size,
             sku: selectedVariant.sku,
+            price: selectedVariant.price,
           }
         : null,
-      price: displayPrice,
     };
 
-    for (let i = 0; i < quantity; i++) {
-      addItem(cartItem);
-    }
+    const res = await useCartStore.getState().addItem(cartItem, quantity);
 
-    setTimeout(() => {
-      setIsAdding(false);
+    setIsAdding(false);
+    if (res.success) {
       navigate("/cart");
-    }, 800);
+    }
   };
 
   return (
     <div className="bg-stone-50 min-h-screen pb-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Breadcrumb */}
         <nav className="text-xs text-stone-500 mb-8 uppercase tracking-wider">
           <span
             className="hover:text-amber-800 cursor-pointer"
@@ -181,30 +209,27 @@ export default function ProductDetail() {
             Shop
           </span>
           <span className="mx-2">/</span>
-          <span className="text-stone-900 font-medium">{p.name}</span>
+          <span className="text-stone-900 font-medium">{product.name}</span>
         </nav>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16">
-          {/* ----------------- LEFT: IMAGE GALLERY ----------------- */}
           <div className="space-y-4">
-            {/* Main Image */}
             <div className="aspect-[3/4] w-full bg-stone-100 rounded-sm overflow-hidden relative group">
               <img
                 src={mainImage}
-                alt={p.name}
+                alt={product.name}
                 className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105"
               />
-              {p.discount > 0 && (
+              {product.discount > 0 && (
                 <span className="absolute top-4 left-4 bg-stone-900 text-amber-200 text-xs font-medium tracking-widest uppercase px-3 py-1.5">
-                  -{p.discount}% OFF
+                  -{product.discount}% OFF
                 </span>
               )}
             </div>
 
-            {/* Thumbnails */}
-            {p.images && p.images.length > 1 && (
+            {product.images && product.images.length > 1 && (
               <div className="grid grid-cols-4 gap-3">
-                {p.images.map((img, idx) => (
+                {product.images.map((img, idx) => (
                   <button
                     key={idx}
                     onClick={() => setMainImage(img)}
@@ -225,38 +250,38 @@ export default function ProductDetail() {
             )}
           </div>
 
-          {/* ----------------- RIGHT: PRODUCT INFO ----------------- */}
           <div className="flex flex-col">
-            {/* ✅ Category & Title (Only display if it's a real name, not an ObjectId) */}
-            {!isObjectId(p.category) && (
+            {!isObjectId(product.category) && (
               <span className="text-xs tracking-[0.2em] text-amber-800 uppercase font-medium mb-2">
-                {p.category}
+                {product.category}
               </span>
             )}
 
             <h1 className="text-3xl md:text-4xl font-serif font-light text-stone-900 mb-4">
-              {p.name}
+              {product.name}
             </h1>
 
-            {/* Rating */}
             <div className="flex items-center gap-2 mb-6">
               <div className="flex text-amber-500">
                 {[...Array(5)].map((_, i) => (
                   <Star
                     key={i}
-                    className={`w-4 h-4 ${i < Math.floor(p.rating || 5) ? "fill-current" : "text-stone-300"}`}
+                    className={`w-4 h-4 ${
+                      i < Math.floor(product.rating || 5)
+                        ? "fill-current"
+                        : "text-stone-300"
+                    }`}
                   />
                 ))}
               </div>
               <span className="text-sm text-stone-600 font-medium">
-                {p.rating || "5.0"}
+                {product.rating || "5.0"}
               </span>
               <span className="text-sm text-stone-400">
-                ({p.numReviews || 0} Reviews)
+                ({product.numReviews || 0} Reviews)
               </span>
             </div>
 
-            {/* Price */}
             <div className="flex items-baseline gap-3 mb-8 pb-8 border-b border-stone-200">
               <span className="text-3xl font-semibold text-stone-900">
                 ₹{displayPrice?.toLocaleString("en-IN")}
@@ -268,10 +293,8 @@ export default function ProductDetail() {
               )}
             </div>
 
-            {/* Variant Selectors */}
             {hasVariants && (
               <div className="space-y-6 mb-8">
-                {/* Color Selector */}
                 {availableColors.length > 0 && (
                   <div>
                     <span className="text-sm font-medium text-stone-900 mb-3 block">
@@ -304,7 +327,6 @@ export default function ProductDetail() {
                   </div>
                 )}
 
-                {/* Size Selector */}
                 {availableSizes.length > 0 && (
                   <div>
                     <span className="text-sm font-medium text-stone-900 mb-3 block">
@@ -314,7 +336,7 @@ export default function ProductDetail() {
                       </span>
                     </span>
                     <div className="flex flex-wrap gap-3">
-                      {(p.variantOptions?.sizes || availableSizes).map(
+                      {(product.variantOptions?.sizes || availableSizes).map(
                         (size) => {
                           const isAvailable = availableSizes.includes(size);
                           return (
@@ -343,22 +365,6 @@ export default function ProductDetail() {
               </div>
             )}
 
-            {/* Stock Status */}
-            <div className="mb-8">
-              {isOutOfStock ? (
-                <span className="inline-flex items-center gap-2 text-sm font-medium text-rose-600">
-                  <span className="w-2 h-2 rounded-full bg-rose-600"></span>
-                  Out of Stock
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-2 text-sm font-medium text-emerald-700">
-                  <span className="w-2 h-2 rounded-full bg-emerald-700"></span>
-                  In Stock ({displayStock} available)
-                </span>
-              )}
-            </div>
-
-            {/* Quantity & Add to Cart */}
             <div className="flex flex-col sm:flex-row gap-4 mb-10">
               <div className="flex items-center border border-stone-300 rounded-sm w-max">
                 <button
@@ -368,7 +374,7 @@ export default function ProductDetail() {
                   <Minus className="w-4 h-4" />
                 </button>
                 <span className="w-12 text-center font-medium text-stone-900">
-                  {quantity}
+                  {selectedVariantInCart ? totalQtyInCart : quantity}
                 </span>
                 <button
                   onClick={() =>
@@ -383,10 +389,15 @@ export default function ProductDetail() {
               <button
                 onClick={handleAddToCart}
                 disabled={
-                  isOutOfStock || (hasVariants && !selectedSize) || isAdding
+                  isOutOfStock ||
+                  (hasVariants && !selectedSize) ||
+                  isAdding ||
+                  selectedVariantInCart
                 }
                 className={`flex-1 py-3.5 px-6 rounded-sm text-sm font-semibold tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${
-                  isOutOfStock || (hasVariants && !selectedSize)
+                  isOutOfStock ||
+                  (hasVariants && !selectedSize) ||
+                  selectedVariantInCart
                     ? "bg-stone-200 text-stone-400 cursor-not-allowed"
                     : isAdding
                       ? "bg-emerald-700 text-white"
@@ -396,27 +407,21 @@ export default function ProductDetail() {
                 <ShoppingBag className="w-4 h-4" />
                 {isAdding
                   ? "Added to Bag"
-                  : isOutOfStock
-                    ? "Out of Stock"
+                  : selectedVariantInCart
+                    ? `In Cart (${totalQtyInCart})`
                     : "Add to Bag"}
-              </button>
-
-              <button className="p-3.5 border border-stone-300 rounded-sm text-stone-600 hover:bg-stone-100 hover:text-rose-600 transition-colors">
-                <Heart className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Description */}
             <div className="prose prose-stone max-w-none mb-10">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-stone-900 mb-3">
                 Description
               </h3>
               <p className="text-stone-600 leading-relaxed font-light">
-                {p.description}
+                {product.description}
               </p>
             </div>
 
-            {/* Trust Badges */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-8 border-t border-stone-200">
               <div className="flex items-start gap-3">
                 <Truck className="w-5 h-5 text-amber-800 shrink-0 mt-0.5" />

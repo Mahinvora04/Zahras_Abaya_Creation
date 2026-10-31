@@ -521,38 +521,54 @@ async def add_to_cart(
     cart = await db.carts.find_one({"user_id": ObjectId(user_id)})
     
     if not cart:
-        # Create new cart
         cart_doc = {
             "user_id": ObjectId(user_id),
             "items": [cart_item.model_dump()],
             "updated_at": datetime.utcnow()
         }
         result = await db.carts.insert_one(cart_doc)
-        
-        # Update user with cart reference
         await db.users.update_one(
             {"_id": ObjectId(user_id)},
             {"$set": {"cart_id": str(result.inserted_id)}}
         )
         return {"success": True, "message": "Item added to cart"}
     
-    # Check if item already exists in cart
+    # ✅ FIX: Build a precise match condition for the specific variant
+    match_condition = {"product_id": product_id}
+    if cart_item.selectedVariant:
+        # Use dictionary .get() to safely access keys instead of dot notation
+        match_condition["selectedVariant.color"] = cart_item.selectedVariant.get("color")
+        match_condition["selectedVariant.size"] = cart_item.selectedVariant.get("size")
+    else:
+        match_condition["selectedVariant"] = None
+        
+    # Check if this EXACT variant combination already exists in the cart
     existing_item = next(
         (item for item in cart["items"] if item["product_id"] == product_id),
         None
     )
     
+    # We do a manual check in Python to be 100% safe with nested dicts
+    is_exact_match = False
     if existing_item:
-        # Update quantity
+        v1 = existing_item.get("selectedVariant")
+        v2 = cart_item.selectedVariant
+        if not v1 and not v2:
+            is_exact_match = True
+        elif v1 and v2 and v1.get("color") == v2.get("color") and v1.get("size") == v2.get("size"):
+            is_exact_match = True
+
+    if is_exact_match:
+        # Increment quantity of the matching variant
         await db.carts.update_one(
-            {"_id": cart["_id"], "items.product_id": product_id},
+            {"_id": cart["_id"], "items": {"$elemMatch": match_condition}},
             {
                 "$inc": {"items.$.quantity": cart_item.quantity},
                 "$set": {"updated_at": datetime.utcnow()}
             }
         )
     else:
-        # Add new item
+        # ✅ Add as a brand new, separate line item
         await db.carts.update_one(
             {"_id": cart["_id"]},
             {
