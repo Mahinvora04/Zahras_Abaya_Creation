@@ -1,99 +1,18 @@
-import { useEffect, useState } from "react";
-
-import AdminSidebar from "../../components/AdminSidebar";
-import { Link } from "react-router-dom";
-import api from "../../api/axios";
-import useProductStore from "../../store/productStore";
+import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Eye, EyeOff, Plus, Search } from 'lucide-react';
+import AdminSidebar from '../../components/AdminSidebar';
+import api from '../../api/axios';
 
 export default function AdminProducts() {
-  const { products, fetchProducts } = useProductStore();
-  const [msg, setMsg] = useState("");
-
-  useEffect(() => {
-    fetchProducts({});
-  }, []);
-
-  const handleDelete = async (id) => {
-    if (!window.confirm("Delete this product?")) return;
-    const res = await useProductStore.getState().deleteProduct(id);
-    if (res.success) {
-      setMsg("Deleted");
-      fetchProducts({});
-      setTimeout(() => setMsg(""), 2000);
-    } else {
-      setMsg(res.message);
-    }
-  };
-
-  return (
-    <div className="flex min-h-screen bg-gray-100">
-      <AdminSidebar />
-      <main className="flex-1 p-8">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Products</h1>
-          <Link
-            to="/admin/products/new"
-            className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
-          >
-            + Add Product
-          </Link>
-        </div>
-
-        {msg && (
-          <div className="bg-green-100 text-green-700 p-3 rounded mb-4">
-            {msg}
-          </div>
-        )}
-
-        <div className="bg-white rounded shadow overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="p-3 text-left">Image</th>
-                <th className="p-3 text-left">Name</th>
-                <th className="p-3 text-left">Category</th>
-                <th className="p-3 text-left">Price</th>
-                <th className="p-3 text-left">Availability</th>
-                <th className="p-3 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((p) => {
-                const variant = p.variants?.find((v) => v.variant_id === p.defaultVariantId) || p.variants?.[0] || {};
-                return (
-                <tr key={p._id} className="border-t">
-                  <td className="p-3">
-                    <img
-                      src={variant.images?.[0] || "/images/placeholder.jpg"}
-                      alt={p.name}
-                      className="w-12 h-12 object-cover rounded"
-                    />
-                  </td>
-                  <td className="p-3">{p.name}</td>
-                  <td className="p-3">{p.category}</td>
-                  <td className="p-3">₹{variant.price ?? "—"}</td>
-                  <td className="p-3">{variant.isAvailable ? "Available" : "Unavailable"}</td>
-                  <td className="p-3 flex gap-2">
-                    <Link
-                      to={`/admin/products/edit/${p._id}`}
-                      className="text-blue-600 hover:underline"
-                    >
-                      Edit
-                    </Link>
-                    <button
-                      onClick={() => handleDelete(p._id)}
-                      className="text-red-600 hover:underline"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </main>
-    </div>
-  );
+  const [products, setProducts] = useState([]); const [query, setQuery] = useState(''); const [listing, setListing] = useState('all'); const [error, setError] = useState(''); const [busyId, setBusyId] = useState('');
+  const load = useCallback(async () => { try { const { data } = await api.get('/admin/products'); setProducts(data.products); setError(''); } catch { setError('Could not load products. Please refresh and try again.'); } }, []);
+  useEffect(() => { load(); }, [load]);
+  const toggle = async (p) => { setBusyId(p._id); try { await api.patch(`/admin/products/${p._id}/listing`, null, { params: { is_active: p.isActive === false } }); setProducts((items) => items.map((item) => item._id === p._id ? { ...item, isActive: item.isActive === false } : item)); } catch (e) { setError(e.response?.data?.detail || 'Could not change listing status.'); } finally { setBusyId(''); } };
+  const visible = products.filter((p) => (listing === 'all' || (listing === 'active' ? p.isActive !== false : p.isActive === false)) && `${p.name} ${p.category}`.toLowerCase().includes(query.toLowerCase()));
+  return <div className="flex min-h-screen bg-stone-50 text-stone-900"><AdminSidebar/><main className="min-w-0 flex-1 p-5 sm:p-8 lg:p-10"><div className="flex flex-wrap items-end justify-between gap-4 mb-7"><div><p className="text-[10px] uppercase tracking-[.25em] text-amber-800 mb-2">Catalogue</p><h1 className="font-serif text-3xl">Products</h1><p className="text-sm text-stone-500 mt-2">Manage catalogue details, pricing and storefront visibility.</p></div><Link to="/admin/products/new" className="bg-stone-900 text-white px-4 py-3 text-xs uppercase tracking-wider hover:bg-amber-900"><Plus size={15} className="inline mr-2"/>Add product</Link></div>
+    {error && <div role="alert" className="bg-rose-50 text-rose-800 border border-rose-200 px-4 py-3 mb-5 text-sm">{error}</div>}
+    <section className="bg-white border border-stone-200"><div className="p-4 sm:p-5 border-b border-stone-100 flex flex-wrap justify-between gap-3"><label className="relative flex-1 min-w-48 max-w-md"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"/><input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Search products" className="w-full border border-stone-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-amber-800"/></label><select value={listing} onChange={(e)=>setListing(e.target.value)} className="border border-stone-200 px-3 py-2 text-sm bg-white"><option value="all">All listings</option><option value="active">Published</option><option value="hidden">Unpublished</option></select></div>
+    <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-stone-50 text-[10px] uppercase tracking-wider text-stone-500"><tr><th className="p-4">Product</th><th className="p-4">Category</th><th className="p-4">Price</th><th className="p-4">Availability</th><th className="p-4">Listing</th><th className="p-4 text-right">Actions</th></tr></thead><tbody>{visible.map((p)=>{ const v=p.variants?.find((variant)=>variant.variant_id===p.defaultVariantId)||p.variants?.[0]||{}; return <tr key={p._id} className="border-t border-stone-100"><td className="p-4"><div className="flex items-center gap-3"><img src={v.images?.[0]||'/images/placeholder.jpg'} alt="" className="w-12 h-14 object-cover bg-stone-100"/><div><b className="font-medium">{p.name}</b><p className="text-xs text-stone-500 mt-1">{p.featured?'Featured · ':''}{p.variants?.length||1} variant{p.variants?.length===1?'':'s'}</p></div></div></td><td className="p-4 text-stone-600">{p.category}</td><td className="p-4">₹{Number(v.price||0).toLocaleString('en-IN')}</td><td className="p-4">{v.isAvailable===false?'Unavailable':'Available'}</td><td className="p-4"><span className={`text-xs px-2 py-1 ${p.isActive===false?'bg-stone-100 text-stone-500':'bg-emerald-50 text-emerald-800'}`}>{p.isActive===false?'Unpublished':'Published'}</span></td><td className="p-4"><div className="flex items-center justify-end gap-3"><button disabled={busyId===p._id} onClick={()=>toggle(p)} className="text-xs text-stone-600 hover:text-amber-900 disabled:opacity-50" title={p.isActive===false?'Publish':'Unpublish'}>{p.isActive===false?<><Eye size={15} className="inline mr-1"/>Publish</>:<><EyeOff size={15} className="inline mr-1"/>Unpublish</>}</button><Link to={`/admin/products/edit/${p._id}`} className="text-xs uppercase tracking-wider text-amber-900 hover:underline">Edit</Link></div></td></tr>; })}{!visible.length&&<tr><td colSpan="6" className="p-10 text-center text-stone-500">{products.length?'No products match this search.':'No products yet. Add your first listing.'}</td></tr>}</tbody></table></div></section>
+  </main></div>;
 }

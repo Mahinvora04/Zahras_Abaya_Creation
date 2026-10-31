@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 venv/
 .venv/
+server/uploads/
 
 # Local environment files; keep shareable templates
 .env

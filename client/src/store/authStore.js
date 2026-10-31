@@ -30,6 +30,19 @@ const useAuthStore = create((set) => ({
     }
   },
 
+  adminLogin: async (email, password) => {
+    set({ error: null });
+    try {
+      const { data } = await api.post('/admin/login', { email, password });
+      set({ user: data.user, error: null });
+      return { success: true };
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Admin login failed';
+      set({ error: msg });
+      return { success: false, message: msg };
+    }
+  },
+
   register: async (name, email, password, phone) => {
     set({ error: null });
     try {

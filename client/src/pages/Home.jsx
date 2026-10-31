@@ -159,7 +159,7 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {categories.map((cat) => {
+          {categories.slice(0, 8).map((cat) => {
             // Calculate count by matching product.category (ID) to cat._id
             const count = getCategoryCount(cat._id);
             
