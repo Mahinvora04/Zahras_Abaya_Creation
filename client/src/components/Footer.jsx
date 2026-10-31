@@ -80,7 +80,7 @@ export default function Footer() {
             <li className="flex items-start gap-3">
               <MapPin className="w-4 h-4 text-amber-300 mt-1 shrink-0" />
               <span className="text-sm text-stone-400">
-                123 Modest Fashion Ave, Luxury District, Dubai, UAE
+                33, GF, Seventh Heaven Complex, Opp Al-Burooj Tower, Sonal-Makraba Road, Ahmedabad - 51
               </span>
             </li>
             <li className="flex items-center gap-3">
@@ -89,7 +89,7 @@ export default function Footer() {
                 href="tel:+971501234567"
                 className="text-sm text-stone-400 hover:text-amber-300 transition-colors"
               >
-                +971 50 123 4567
+                +91 97243 73153
               </a>
             </li>
             <li className="flex items-center gap-3">

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Depends, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from passlib.context import CryptContext
 from jose import jwt, JWTError
 from dotenv import load_dotenv
@@ -95,6 +95,20 @@ class AddressUpdateReq(BaseModel):
     state: Optional[str] = None
     country: Optional[str] = None
     is_default: Optional[bool] = None
+    
+class CartItem(BaseModel):
+    product_id: str
+    quantity: int = 1
+    selectedVariant: Optional[dict] = None
+
+class Cart(BaseModel):
+    user_id: str
+    items: List[CartItem] = []
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    
+class UpdateCartItemReq(BaseModel):
+    quantity: Optional[int] = None
+    selectedVariant: Optional[dict] = None
     
 # 3. Helper Functions
 def create_token(user_id: str):
@@ -191,30 +205,87 @@ async def logout(response: Response):
 
 # --- PRODUCTS (Public) ---
 @app.get("/api/products")
-async def get_products(category: Optional[str] = None, search: Optional[str] = None, sort: str = "newest"):
-    query = {}
+async def get_products(
+    category: Optional[str] = None, 
+    search: Optional[str] = None, 
+    sort: str = "newest",
+    sizes: Optional[str] = None,
+    colors: Optional[str] = None,
+    minPrice: Optional[float] = None,
+    maxPrice: Optional[float] = None,
+    page: int = 1,       # ✅ Added
+    limit: int = 20      # ✅ Added (20 per page)
+):
+    base_query = {}
     
-    # ✅ Handle category filtering properly
+    # 1. Build base query (Category & Search)
     if category and category != "All":
-        # First, find the category by name to get its ObjectId
         category_doc = await db.categories.find_one({"name": {"$regex": category, "$options": "i"}})
         if category_doc:
-            query["category"] = category_doc["_id"]  # Use ObjectId
+            base_query["category"] = category_doc["_id"]
         else:
-            # Category not found, return empty results
-            return {"success": True, "products": []}
+            return {
+                "success": True, "products": [], "totalCount": 0, "totalPages": 1, "currentPage": 1,
+                "availableFilters": {"minPrice": 0, "maxPrice": 10000, "sizes": [], "colors": []}
+            }
     
     if search and search.strip():
-        query["name"] = {"$regex": search, "$options": "i"}
+        base_query["name"] = {"$regex": search, "$options": "i"}
     
+    # 2. Get Available Filters (based on base query)
+    price_agg = await db.products.aggregate([
+        {"$match": base_query},
+        {"$group": {"_id": None, "minPrice": {"$min": "$price"}, "maxPrice": {"$max": "$price"}}}
+    ]).to_list(length=1)
+    
+    min_p = price_agg[0]["minPrice"] if price_agg and price_agg[0].get("minPrice") is not None else 0
+    max_p = price_agg[0]["maxPrice"] if price_agg and price_agg[0].get("maxPrice") is not None else 10000
+
+    variant_agg = await db.products.aggregate([
+        {"$match": base_query},
+        {"$unwind": {"path": "$variants", "preserveNullAndEmptyArrays": True}},
+        {"$group": {"_id": None, "sizes": {"$addToSet": "$variants.size"}, "colors": {"$addToSet": "$variants.color"}}}
+    ]).to_list(length=1)
+    
+    available_filters = {
+        "minPrice": min_p,
+        "maxPrice": max_p,
+        "sizes": sorted([str(s) for s in variant_agg[0].get("sizes", []) if s]) if variant_agg else [],
+        "colors": sorted([str(c) for c in variant_agg[0].get("colors", []) if c]) if variant_agg else []
+    }
+
+    # 3. Apply specific filters
+    final_query = base_query.copy()
+    if minPrice is not None:
+        final_query.setdefault("price", {})["$gte"] = minPrice
+    if maxPrice is not None:
+        final_query.setdefault("price", {})["$lte"] = maxPrice
+    if sizes and sizes.strip():
+        final_query["variants.size"] = {"$in": [s.strip() for s in sizes.split(",")]}
+    if colors and colors.strip():
+        final_query["variants.color"] = {"$in": [c.strip() for c in colors.split(",")]}
+    
+    # 4. Sorting
     sort_order = -1 if sort in ["newest", "price-high", "rating"] else 1
     sort_field = "price" if "price" in sort else ("rating" if sort == "rating" else "_id")
     
-    cursor = db.products.find(query).sort(sort_field, sort_order)
-    products = await cursor.to_list(length=100)
+    # 5. Pagination Logic
+    total_count = await db.products.count_documents(final_query)
+    total_pages = (total_count + limit - 1) // limit if total_count > 0 else 1
+    skip = (page - 1) * limit
     
-    return {"success": True, "products": [serialize_doc(p) for p in products]}
-
+    cursor = db.products.find(final_query).sort(sort_field, sort_order).skip(skip).limit(limit)
+    products = await cursor.to_list(length=limit)
+    
+    return {
+        "success": True, 
+        "products": [serialize_doc(p) for p in products],
+        "totalCount": total_count,
+        "totalPages": total_pages,
+        "currentPage": page,
+        "availableFilters": available_filters
+    }
+       
 @app.get("/api/products/featured")
 async def get_featured():
     cursor = db.products.find({"featured": True}).limit(5)
@@ -380,3 +451,185 @@ async def delete_address(address_id: str, current_user: dict = Depends(get_curre
             
     final_user = await db.users.find_one({"_id": user_id})
     return {"success": True, "user": serialize_doc(final_user)}
+
+# ==========================================
+# CART (Protected)
+# ==========================================
+
+@app.get("/api/cart")
+async def get_cart(current_user: dict = Depends(get_current_user)):
+    user_id = current_user["_id"]
+    
+    # Find or create cart for user
+    cart = await db.carts.find_one({"user_id": ObjectId(user_id)})
+    
+    if not cart:
+        # Create new cart and update user reference
+        cart_doc = {
+            "user_id": ObjectId(user_id),
+            "items": [],
+            "updated_at": datetime.utcnow()
+        }
+        result = await db.carts.insert_one(cart_doc)
+        
+        # Update user with cart reference
+        await db.users.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$set": {"cart_id": str(result.inserted_id)}}
+        )
+        
+        cart = await db.carts.find_one({"_id": result.inserted_id})
+    
+    # Populate product details for each item
+    populated_items = []
+    for item in cart.get("items", []):
+        product = await db.products.find_one({"_id": ObjectId(item["product_id"])})
+        if product:
+            populated_items.append({
+                **item,
+                "product": serialize_doc(product)
+            })
+    
+    # Handle datetime serialization safely
+    updated_at = cart.get("updated_at")
+    if isinstance(updated_at, datetime):
+        updated_at = updated_at.isoformat()
+    
+    return {
+        "success": True,
+        "cart": {
+            "_id": str(cart["_id"]),
+            "items": populated_items,
+            "updated_at": updated_at
+        }
+    }
+
+@app.post("/api/cart/items")
+async def add_to_cart(
+    cart_item: CartItem,
+    current_user: dict = Depends(get_current_user)
+):
+    user_id = current_user["_id"]
+    product_id = cart_item.product_id
+    
+    # Verify product exists
+    product = await db.products.find_one({"_id": ObjectId(product_id)})
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Find or create cart
+    cart = await db.carts.find_one({"user_id": ObjectId(user_id)})
+    
+    if not cart:
+        # Create new cart
+        cart_doc = {
+            "user_id": ObjectId(user_id),
+            "items": [cart_item.model_dump()],
+            "updated_at": datetime.utcnow()
+        }
+        result = await db.carts.insert_one(cart_doc)
+        
+        # Update user with cart reference
+        await db.users.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$set": {"cart_id": str(result.inserted_id)}}
+        )
+        return {"success": True, "message": "Item added to cart"}
+    
+    # Check if item already exists in cart
+    existing_item = next(
+        (item for item in cart["items"] if item["product_id"] == product_id),
+        None
+    )
+    
+    if existing_item:
+        # Update quantity
+        await db.carts.update_one(
+            {"_id": cart["_id"], "items.product_id": product_id},
+            {
+                "$inc": {"items.$.quantity": cart_item.quantity},
+                "$set": {"updated_at": datetime.utcnow()}
+            }
+        )
+    else:
+        # Add new item
+        await db.carts.update_one(
+            {"_id": cart["_id"]},
+            {
+                "$push": {"items": cart_item.model_dump()},
+                "$set": {"updated_at": datetime.utcnow()}
+            }
+        )
+    
+    return {"success": True, "message": "Item added to cart"}
+
+@app.put("/api/cart/items/{product_id}")
+async def update_cart_item(
+    product_id: str,
+    req: UpdateCartItemReq,
+    current_user: dict = Depends(get_current_user)
+):
+    user_id = current_user["_id"]
+    cart = await db.carts.find_one({"user_id": ObjectId(user_id)})
+    if not cart:
+        raise HTTPException(status_code=404, detail="Cart not found")
+    
+    # If quantity is 0 or less, remove the item
+    if req.quantity is not None and req.quantity <= 0:
+        await db.carts.update_one(
+            {"_id": cart["_id"]},
+            {"$pull": {"items": {"product_id": product_id}}, "$set": {"updated_at": datetime.utcnow()}}
+        )
+        return {"success": True, "message": "Item removed"}
+    
+    # Build dynamic update document
+    update_doc = {}
+    if req.quantity is not None:
+        update_doc["items.$.quantity"] = req.quantity
+    if req.selectedVariant is not None:
+        update_doc["items.$.selectedVariant"] = req.selectedVariant
+        
+    if update_doc:
+        update_doc["updated_at"] = datetime.utcnow()
+        await db.carts.update_one(
+            {"_id": cart["_id"], "items.product_id": product_id},
+            {"$set": update_doc}
+        )
+        
+    return {"success": True, "message": "Cart updated"}
+
+@app.delete("/api/cart/items/{product_id}")
+async def remove_from_cart(
+    product_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    user_id = current_user["_id"]
+    
+    cart = await db.carts.find_one({"user_id": ObjectId(user_id)})
+    if not cart:
+        raise HTTPException(status_code=404, detail="Cart not found")
+    
+    await db.carts.update_one(
+        {"_id": cart["_id"]},
+        {
+            "$pull": {"items": {"product_id": product_id}},
+            "$set": {"updated_at": datetime.utcnow()}
+        }
+    )
+    
+    return {"success": True, "message": "Item removed from cart"}
+
+@app.delete("/api/cart")
+async def clear_cart(
+    current_user: dict = Depends(get_current_user)
+):
+    user_id = current_user["_id"]
+    
+    await db.carts.update_one(
+        {"user_id": ObjectId(user_id)},
+        {
+            "$set": {"items": [], "updated_at": datetime.utcnow()}
+        }
+    )
+    
+    return {"success": True, "message": "Cart cleared"}

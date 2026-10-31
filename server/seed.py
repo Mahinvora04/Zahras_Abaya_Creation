@@ -12,7 +12,7 @@ from app.models.user import User
 from app.models.product import Product
 from app.models.content import Slide, Category, Feature
 from passlib.context import CryptContext
-d
+
 load_dotenv()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

@@ -4,6 +4,7 @@ import About from "./pages/About";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminProducts from "./pages/admin/Products";
 import Cart from "./pages/Cart";
+import Checkout from "./pages/Checkout";
 import Footer from "./components/Footer";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
@@ -15,14 +16,22 @@ import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Register from "./pages/Register";
 import useAuthStore from "./store/authStore";
+import useCartStore from "./store/cartStore";
 import { useEffect } from "react";
 
 export default function App() {
-  const { loadUser } = useAuthStore();
+  const { loadUser, user } = useAuthStore();
+  const { fetchCart } = useCartStore();
 
   useEffect(() => {
     loadUser();
   }, [loadUser]);
+
+  useEffect(() => {
+    if (user) {
+      fetchCart();
+    }
+  }, [user, fetchCart]);
 
   return (
     <BrowserRouter>
@@ -81,6 +90,15 @@ export default function App() {
                   element={
                     <ProtectedRoute>
                       <Cart />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
+                  path="/checkout"
+                  element={
+                    <ProtectedRoute>
+                      <Checkout />
                     </ProtectedRoute>
                   }
                 />

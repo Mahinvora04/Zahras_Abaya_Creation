@@ -3,6 +3,8 @@ import { create } from "zustand";
 
 const useProductStore = create((set, get) => ({
   products: [],
+  availableFilters: { minPrice: 0, maxPrice: 10000, sizes: [], colors: [] },
+  pagination: { currentPage: 1, totalPages: 1, totalCount: 0 }, // ✅ Added
   featured: [],
   currentProduct: null,
   loading: false,
@@ -11,10 +13,30 @@ const useProductStore = create((set, get) => ({
   fetchProducts: async (filters = {}) => {
     set({ loading: true, error: null });
     try {
-      const params = new URLSearchParams(filters).toString();
-      const { data } = await api.get(`/products?${params}`);
-      set({ products: data.products, loading: false });
+      const cleanFilters = Object.fromEntries(
+        Object.entries(filters).filter(
+          ([_, value]) => value !== undefined && value !== null && value !== "",
+        ),
+      );
+
+      const { data } = await api.get("/products", { params: cleanFilters });
+      set({
+        products: data.products,
+        availableFilters: data.availableFilters || {
+          minPrice: 0,
+          maxPrice: 10000,
+          sizes: [],
+          colors: [],
+        },
+        pagination: {
+          currentPage: data.currentPage || 1,
+          totalPages: data.totalPages || 1,
+          totalCount: data.totalCount || 0,
+        },
+        loading: false,
+      });
     } catch (err) {
+      console.error("Fetch products error:", err);
       set({ error: "Failed to load products", loading: false });
     }
   },

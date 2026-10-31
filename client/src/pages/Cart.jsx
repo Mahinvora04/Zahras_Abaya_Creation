@@ -1,25 +1,36 @@
-import {
-  ArrowRight,
-  Minus,
-  Plus,
-  ShieldCheck,
-  ShoppingBag,
-  Trash2,
-  Truck
-} from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { ArrowRight, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 
-import useCartStore from '../store/cartStore';
+import useCartStore from "../store/cartStore";
+import { useEffect } from "react";
 
 export default function Cart() {
-  const { items, removeItem, updateQty, getTotal } = useCartStore();
+  const {
+    items,
+    fetchCart,
+    removeItem,
+    updateQty,
+    getTotal,
+    getTotalItems,
+    loading,
+  } = useCartStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchCart();
+  }, []);
+
   const total = getTotal();
   const shippingFee = items.length > 0 ? 99 : 0;
   const grandTotal = total + shippingFee;
 
-  // ✅ Helper to check if a string is a MongoDB ObjectId (24 hex characters)
-  const isObjectId = (str) => typeof str === 'string' && /^[0-9a-fA-F]{24}$/.test(str);
+  if (loading) {
+    return (
+      <div className="min-h-[60vh] flex justify-center items-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-800"></div>
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -33,15 +44,12 @@ export default function Cart() {
         <h1 className="text-3xl md:text-4xl font-serif text-stone-900 font-light mb-4">
           Your Cart is Currently Empty
         </h1>
-        <p className="text-sm text-stone-500 font-light max-w-md mb-8 leading-relaxed">
-          Discover our handcrafted luxury Abayas, Kaftans, and Hijabs to elevate your wardrobe with timeless modesty.
-        </p>
         <Link
           to="/products"
-          className="inline-flex items-center gap-3 bg-stone-900 text-stone-100 hover:bg-amber-900 px-8 py-3.5 text-xs font-medium tracking-widest uppercase transition-all duration-300 shadow-md group"
+          className="inline-flex items-center gap-3 bg-stone-900 text-stone-100 hover:bg-amber-900 px-8 py-3.5 text-xs font-medium tracking-widest uppercase transition-all duration-300 shadow-md"
         >
-          <span>Explore Collection</span>
-          <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+          Explore Collection
+          <ArrowRight className="w-4 h-4" />
         </Link>
       </div>
     );
@@ -50,130 +58,110 @@ export default function Cart() {
   return (
     <div className="bg-stone-50/50 min-h-screen py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-10 text-center sm:text-left">
+        <div className="mb-10">
           <span className="text-xs font-medium tracking-[0.25em] text-amber-800 uppercase">
             Selected Items
           </span>
           <h1 className="text-3xl sm:text-4xl font-serif text-stone-900 font-light mt-1">
-            Shopping Cart ({items.reduce((acc, item) => acc + item.qty, 0)})
+            Shopping Cart ({getTotalItems()})
           </h1>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 items-start">
-          {/* Cart Items List */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+          {/* Cart Items */}
           <div className="lg:col-span-2 space-y-4">
             {items.map((item) => {
-              const imageSrc = item.images?.[0] || '/images/placeholder.jpg';
-              // Use uniqueId if available (from variant logic), otherwise fallback to _id for React key
-              const itemKey = item.uniqueId || item._id;
+              // ✅ Safely access product data
+              const product = item.product || {};
+              const imageSrc = product.images?.[0] || "/images/placeholder.jpg";
+              const price = product.price || 0;
+              const quantity = item.quantity || 1;
 
               return (
                 <div
-                  key={itemKey}
-                  className="bg-white border border-stone-200/80 p-4 sm:p-6 rounded-sm shadow-sm flex flex-col sm:flex-row gap-5 items-stretch"
+                  key={item.product_id}
+                  className="bg-white border border-stone-200/80 p-4 sm:p-6 rounded-sm shadow-sm flex gap-5"
                 >
                   {/* Image */}
                   <Link
-                    to={`/product/${item._id}`}
-                    className="w-full sm:w-28 h-36 bg-stone-100 rounded-sm overflow-hidden shrink-0 block relative"
+                    to={`/product/${item.product_id}`}
+                    className="w-24 h-28 bg-stone-100 rounded-sm overflow-hidden shrink-0 block"
                   >
                     <img
                       src={imageSrc}
-                      alt={item.name}
-                      className="w-full h-full object-cover object-top hover:scale-105 transition-transform duration-500"
+                      alt={product.name || "Product"}
+                      className="w-full h-full object-cover object-top"
                     />
                   </Link>
 
-                  {/* Info & Controls */}
-                  <div className="flex-1 flex flex-col justify-between space-y-4">
-                    <div className="flex justify-between items-start gap-4">
-                      <div>
-                        {/* ✅ Category Tag (Only display if it's a real name, not an ObjectId) */}
-                        {item.category && !isObjectId(item.category) && (
-                          <span className="text-[10px] tracking-widest uppercase text-amber-800 font-medium block mb-1">
-                            {item.category}
-                          </span>
-                        )}
-                        
-                        {/* Display Variant info if it exists */}
-                        {item.selectedVariant && (
-                          <span className="text-[10px] tracking-widest uppercase text-stone-500 font-medium block mb-1">
-                            {item.selectedVariant.color} / {item.selectedVariant.size}
-                          </span>
-                        )}
-
-                        <Link to={`/product/${item._id}`}>
-                          <h3 className="font-serif text-lg text-stone-900 font-medium hover:text-amber-800 transition-colors line-clamp-1">
-                            {item.name}
-                          </h3>
-                        </Link>
-                      </div>
-
-                      <button
-                        onClick={() => removeItem(itemKey)}
-                        className="text-stone-400 hover:text-rose-700 transition-colors p-1"
-                        aria-label="Remove item"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                  {/* Info */}
+                  <div className="flex-1 flex flex-col justify-between">
+                    <div>
+                      <Link to={`/product/${item.product_id}`}>
+                        <h3 className="font-serif text-lg text-stone-900 font-medium hover:text-amber-800 transition-colors">
+                          {product.name || "Product"}
+                        </h3>
+                      </Link>
+                      {item.selectedVariant && (
+                        <p className="text-xs text-stone-500 mt-1">
+                          {item.selectedVariant.color} /{" "}
+                          {item.selectedVariant.size}
+                        </p>
+                      )}
                     </div>
 
-                    {/* Price & Quantity controls */}
-                    <div className="flex items-center justify-between pt-2 border-t border-stone-100">
-                      {/* Quantity Stepper */}
+                    <div className="flex items-center justify-between mt-4">
                       <div className="flex items-center border border-stone-200 bg-stone-50 rounded-sm">
                         <button
-                          onClick={() => updateQty(itemKey, Math.max(1, item.qty - 1))}
-                          disabled={item.qty <= 1}
-                          className="p-2 text-stone-600 hover:text-stone-900 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                          aria-label="Decrease quantity"
+                          onClick={() =>
+                            updateQty(item.product_id, quantity - 1)
+                          }
+                          disabled={quantity <= 1}
+                          className="p-2 text-stone-600 hover:text-stone-900 disabled:opacity-30"
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </button>
-                        <span className="px-3 text-xs font-semibold text-stone-900 min-w-[32px] text-center">
-                          {item.qty}
+                        <span className="px-3 text-xs font-semibold">
+                          {quantity}
                         </span>
                         <button
-                          onClick={() => updateQty(itemKey, item.qty + 1)}
-                          className="p-2 text-stone-600 hover:text-stone-900 transition-colors"
-                          aria-label="Increase quantity"
+                          onClick={() =>
+                            updateQty(item.product_id, quantity + 1)
+                          }
+                          className="p-2 text-stone-600 hover:text-stone-900"
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>
                       </div>
 
-                      {/* Total Item Price */}
                       <div className="text-right">
-                        <span className="text-base font-semibold text-stone-900 block">
-                          ₹{(item.price * item.qty).toLocaleString('en-IN')}
+                        <span className="text-base font-semibold text-stone-900">
+                          ₹{(price * quantity).toLocaleString("en-IN")}
                         </span>
-                        {item.qty > 1 && (
-                          <span className="text-[11px] text-stone-400 font-light">
-                            ₹{item.price.toLocaleString('en-IN')} each
+                        {quantity > 1 && (
+                          <span className="text-[11px] text-stone-400 block">
+                            ₹{price.toLocaleString("en-IN")} each
                           </span>
                         )}
                       </div>
                     </div>
                   </div>
+
+                  {/* Remove Button */}
+                  <button
+                    onClick={() => removeItem(item.product_id)}
+                    className="text-stone-400 hover:text-rose-700 transition-colors self-start"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               );
             })}
-
-            {/* Navigation back to shop */}
-            <div className="pt-4">
-              <Link
-                to="/products"
-                className="inline-flex items-center gap-2 text-xs font-semibold tracking-wider text-amber-900 hover:text-stone-900 uppercase border-b border-amber-900/40 pb-0.5 transition-colors"
-              >
-                <span>← Continue Browsing Collection</span>
-              </Link>
-            </div>
           </div>
 
-          {/* Order Summary Sidebar */}
-          <div className="bg-white border border-stone-200/80 p-6 sm:p-8 rounded-sm shadow-sm space-y-6 sticky top-28">
-            <h2 className="text-xl font-serif text-stone-900 font-light border-b border-stone-100 pb-4">
+          {/* Order Summary */}
+          <div className="bg-white border border-stone-200/80 p-6 sm:p-8 rounded-sm shadow-sm h-fit sticky top-28">
+            <h2 className="text-xl font-serif text-stone-900 font-light border-b border-stone-100 pb-4 mb-6">
               Order Summary
             </h2>
 
@@ -181,49 +169,32 @@ export default function Cart() {
               <div className="flex justify-between text-stone-600">
                 <span>Subtotal</span>
                 <span className="font-semibold text-stone-900">
-                  ₹{total.toLocaleString('en-IN')}
+                  ₹{isNaN(total) ? 0 : total.toLocaleString("en-IN")}
                 </span>
               </div>
               <div className="flex justify-between text-stone-600">
                 <span>Estimated Shipping</span>
                 <span className="font-semibold text-stone-900">
-                  ₹{shippingFee.toLocaleString('en-IN')}
+                  ₹{shippingFee.toLocaleString("en-IN")}
                 </span>
               </div>
-              
-              <div className="border-t border-stone-200 pt-4 flex justify-between items-baseline text-stone-900">
-                <span className="text-sm font-medium uppercase tracking-wider">Total</span>
-                <div className="text-right">
-                  <span className="text-xl font-semibold text-stone-900">
-                    ₹{grandTotal.toLocaleString('en-IN')}
-                  </span>
-                  <span className="block text-[10px] text-stone-400 font-light mt-0.5">
-                    Inclusive of all taxes
-                  </span>
-                </div>
+              <div className="border-t border-stone-200 pt-4 flex justify-between items-baseline">
+                <span className="text-sm font-medium uppercase tracking-wider">
+                  Total
+                </span>
+                <span className="text-xl font-semibold text-stone-900">
+                  ₹{isNaN(grandTotal) ? 0 : grandTotal.toLocaleString("en-IN")}
+                </span>
               </div>
             </div>
 
-            {/* Checkout CTA */}
             <button
-              onClick={() => navigate('/checkout')}
-              className="w-full bg-stone-900 text-stone-100 hover:bg-amber-900 py-3.5 px-4 text-xs font-medium tracking-widest uppercase transition-all duration-300 shadow-md flex items-center justify-center gap-2"
+              onClick={() => navigate("/checkout")}
+              className="w-full bg-stone-900 text-stone-100 hover:bg-amber-900 py-3.5 px-4 text-xs font-medium tracking-widest uppercase transition-all duration-300 mt-6 flex items-center justify-center gap-2"
             >
-              <span>Proceed to Checkout</span>
+              Proceed to Checkout
               <ArrowRight className="w-4 h-4" />
             </button>
-
-            {/* Trust Badges */}
-            <div className="pt-4 border-t border-stone-100 space-y-3">
-              <div className="flex items-center gap-3 text-xs text-stone-500">
-                <ShieldCheck className="w-4 h-4 text-amber-800 shrink-0" />
-                <span>100% Secure & Encrypted Checkout</span>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-stone-500">
-                <Truck className="w-4 h-4 text-amber-800 shrink-0" />
-                <span>Handpacked with Signature Packaging</span>
-              </div>
-            </div>
           </div>
         </div>
       </div>

@@ -17,7 +17,9 @@ import { useState } from "react";
 
 export default function Navbar() {
   const { user, logout } = useAuthStore();
-  const count = useCartStore((s) => s.items.reduce((sum, i) => sum + i.qty, 0));
+
+  // ✅ FIX: Use the store's built-in getTotalItems() which correctly sums 'quantity'
+  const count = useCartStore((s) => s.getTotalItems());
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -41,7 +43,6 @@ export default function Navbar() {
       {/* ----------------- MAIN NAVIGATION BAR ----------------- */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
-          
           {/* 1. Brand Logo (Strictly Left) */}
           <Link to="/" className="flex items-center gap-3 group shrink-0">
             <img
@@ -53,7 +54,6 @@ export default function Navbar() {
 
           {/* 2. Everything Else (Right Side) */}
           <div className="flex items-center gap-4 md:gap-8">
-            
             {/* Navigation Links (Desktop Only) */}
             <nav className="hidden md:flex items-center gap-6 lg:gap-8">
               <Link
@@ -80,11 +80,16 @@ export default function Navbar() {
               >
                 Hijab
               </Link>
+              <Link
+                to="/about-us"
+                className="text-xs font-medium uppercase tracking-widest text-stone-300 hover:text-amber-300 transition-colors"
+              >
+                About Us
+              </Link>
             </nav>
 
             {/* Right Action Icons (Cart, User, Mobile Menu) */}
             <div className="flex items-center gap-3 sm:gap-4">
-              
               {/* Cart Icon */}
               <Link
                 to="/cart"
@@ -177,7 +182,7 @@ export default function Navbar() {
                 </div>
               )}
 
-              {/* Mobile Menu Button (Far Right on Mobile) */}
+              {/* Mobile Menu Button */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="md:hidden p-2 text-stone-300 hover:text-amber-200 focus:outline-none"
