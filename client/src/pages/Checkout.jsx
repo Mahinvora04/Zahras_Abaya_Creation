@@ -3,7 +3,6 @@ import {
   ArrowRight,
   CheckCircle2,
   MapPin,
-  Minus,
   Package,
   Plus,
   ShieldCheck,
@@ -35,8 +34,6 @@ export default function Checkout() {
 
   const items = useCartStore((state) => state.items);
   const getTotal = useCartStore((state) => state.getTotal);
-  const updateQty = useCartStore((state) => state.updateQty);
-  const updateVariant = useCartStore((state) => state.updateVariant); // ✅ Added
 
   const addresses = useMemo(() => user?.addresses || [], [user?.addresses]);
 
@@ -414,22 +411,17 @@ export default function Checkout() {
               <div className="space-y-6">
                 {items.map((item) => {
                   const product = item.product || {};
-                  const variants = product.variants || [];
-
-                  // ✅ Default to first variant if none is selected
-                  const currentVariant =
-                    item.selectedVariant || variants[0] || {};
                   const qty = item.quantity || 1;
 
                   // ✅ Use variant price if it exists, otherwise fallback to product price
                   const price =
-                    currentVariant.price !== undefined
-                      ? currentVariant.price
+                    item.selectedVariant?.price !== undefined
+                      ? item.selectedVariant.price
                       : product.price || 0;
 
                   return (
                     <div
-                      key={item.product_id}
+                      key={`${item.product_id}:${item.variant_id || "none"}`}
                       className="flex flex-col sm:flex-row gap-4 items-start sm:items-center border-b border-stone-100 pb-6 last:border-0 last:pb-0"
                     >
                       <img
@@ -442,59 +434,15 @@ export default function Checkout() {
                           {product.name}
                         </h3>
 
-                        {/* ✅ Variant Selector */}
-                        {variants.length > 0 && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-stone-500">
-                              Variant:
-                            </span>
-                            <select
-                              value={JSON.stringify(currentVariant)}
-                              onChange={(e) =>
-                                updateVariant(
-                                  item.product_id,
-                                  JSON.parse(e.target.value),
-                                )
-                              }
-                              className="text-xs border border-stone-200 rounded-sm px-2 py-1 bg-white focus:outline-none focus:border-amber-800 cursor-pointer"
-                            >
-                              {variants.map((v, idx) => (
-                                <option key={idx} value={JSON.stringify(v)}>
-                                  {v.color} / {v.size}{" "}
-                                  {v.price !== product.price
-                                    ? `(₹${v.price})`
-                                    : ""}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-
-                        {/* ✅ Quantity Stepper */}
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs text-stone-500">Qty:</span>
-                          <div className="flex items-center border border-stone-200 rounded-sm bg-stone-50">
-                            <button
-                              onClick={() =>
-                                updateQty(item.product_id, qty - 1)
-                              }
-                              disabled={qty <= 1}
-                              className="p-1.5 text-stone-600 hover:text-stone-900 disabled:opacity-30 transition-colors"
-                            >
-                              <Minus className="w-3 h-3" />
-                            </button>
-                            <span className="px-2 text-xs font-semibold min-w-[24px] text-center">
-                              {qty}
-                            </span>
-                            <button
-                              onClick={() =>
-                                updateQty(item.product_id, qty + 1)
-                              }
-                              className="p-1.5 text-stone-600 hover:text-stone-900 transition-colors"
-                            >
-                              <Plus className="w-3 h-3" />
-                            </button>
-                          </div>
+                        {/* Read-only item details */}
+                        <div className="space-y-1 text-xs text-stone-500">
+                          {item.selectedVariant && (
+                            <p>
+                              {item.selectedVariant.color} / {" "}
+                              {item.selectedVariant.size}
+                            </p>
+                          )}
+                          <p>Quantity: {qty}</p>
                         </div>
                       </div>
 

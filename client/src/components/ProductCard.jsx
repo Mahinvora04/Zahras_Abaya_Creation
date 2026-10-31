@@ -1,46 +1,73 @@
-import { Eye, ShoppingBag, Star } from "lucide-react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Eye, ShoppingBag, Star } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
-import useAuthStore from "../store/authStore";
-import useCartStore from "../store/cartStore";
+import useAuthStore from '../store/authStore';
+import useCartStore from '../store/cartStore';
 
 export default function ProductCard({ product }) {
   const addItem = useCartStore((s) => s.addItem);
-  const cartItems = useCartStore((s) => s.items); // ✅ Get cart items
-  const { user } = useAuthStore();
+  const cartItems = useCartStore((s) => s.items); // ✅ Get all cart items
+  const { user } = useAuthStore(); 
   const navigate = useNavigate();
   const location = useLocation();
 
   if (!product) return null;
 
-  const mainImage = product.images?.[0] || "/images/placeholder.jpg";
+  const mainImage = product.images?.[0] || '/images/placeholder.jpg';
   const secondaryImage = product.images?.[1] || mainImage;
 
-  // ✅ Check if this specific product is already in the cart
-  const cartItem = cartItems.find((item) => item.product_id === product._id);
-  const isInCart = !!cartItem;
-  const qtyInCart = cartItem ? cartItem.quantity : 0;
+  // ✅ Get the default variant (first one)
+  const defaultVariant = product.variants?.[0] || null;
+  
+  // ✅ Check if the DEFAULT variant is already in cart
+  const defaultVariantInCart = cartItems.find(item => {
+    if (item.product_id !== product._id) return false;
+    
+    if (defaultVariant) {
+      return (
+        item.selectedVariant?.color === defaultVariant.color &&
+        item.selectedVariant?.size === defaultVariant.size
+      );
+    }
+    // If no variants, just match by product_id and null selectedVariant
+    return !item.selectedVariant;
+  });
 
-  const handleAddToCart = (e) => {
+  // ✅ Calculate total quantity of ALL variants of this product in cart
+  const totalQtyInCart = cartItems
+    .filter(item => item.product_id === product._id)
+    .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+
+  const isInCart = !!defaultVariantInCart;
+  const qtyInCart = totalQtyInCart;
+
+  const handleAddToCart = async (e) => {
     e.preventDefault();
     e.stopPropagation();
 
     if (!user) {
-      navigate("/login", { state: { from: location.pathname } });
+      navigate('/login', { state: { from: location.pathname } });
       return;
     }
 
-    // ✅ If already in cart, navigate to cart instead of adding again
-    if (isInCart) {
-      navigate("/cart");
-      return;
-    }
+    // ✅ Always allow adding - backend will handle variants correctly
+    const itemToAdd = {
+      _id: product._id,
+      name: product.name,
+      price: defaultVariant ? defaultVariant.price : product.price,
+      images: product.images,
+      selectedVariant: defaultVariant ? {
+        color: defaultVariant.color,
+        size: defaultVariant.size,
+        sku: defaultVariant.sku,
+        price: defaultVariant.price
+      } : null
+    };
 
-    addItem(product);
+    await addItem(itemToAdd, 1);
   };
 
-  const isObjectId = (str) =>
-    typeof str === "string" && /^[0-9a-fA-F]{24}$/.test(str);
+  const isObjectId = (str) => typeof str === 'string' && /^[0-9a-fA-F]{24}$/.test(str);
 
   return (
     <div className="group relative bg-white border border-stone-200/80 rounded-sm overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-amber-200/60 flex flex-col justify-between">
@@ -52,7 +79,7 @@ export default function ProductCard({ product }) {
               src={mainImage}
               alt={product.name}
               className={`w-full h-full object-cover object-top transition-all duration-700 ease-out group-hover:scale-105 ${
-                product.images?.[1] ? "group-hover:opacity-0" : ""
+                product.images?.[1] ? 'group-hover:opacity-0' : ''
               }`}
             />
             {product.images?.[1] && (
@@ -95,12 +122,12 @@ export default function ProductCard({ product }) {
               onClick={handleAddToCart}
               className={`w-full py-2.5 px-4 text-xs font-medium tracking-widest uppercase transition-all duration-300 flex items-center justify-center gap-2 ${
                 isInCart
-                  ? "bg-stone-900 text-white hover:bg-amber-900" // ✅ Darker style when in cart
-                  : "bg-white text-stone-900 hover:bg-amber-100 shadow-md"
+                  ? 'bg-stone-900 text-white hover:bg-amber-900'
+                  : 'bg-white text-stone-900 hover:bg-amber-100 shadow-md'
               }`}
             >
               <ShoppingBag className="w-3.5 h-3.5" />
-              <span>{isInCart ? `In Cart (${qtyInCart})` : "Quick Add"}</span>
+              <span>{isInCart ? `In Cart (${qtyInCart})` : 'Quick Add'}</span>
             </button>
           </div>
         </div>
@@ -124,7 +151,7 @@ export default function ProductCard({ product }) {
               <Star className="w-3.5 h-3.5 fill-current" />
             </div>
             <span className="text-xs text-stone-600 font-medium">
-              {product.rating ? Number(product.rating).toFixed(1) : "5.0"}
+              {product.rating ? Number(product.rating).toFixed(1) : '5.0'}
             </span>
             <span className="text-xs text-stone-400 font-light">
               ({product.numReviews || 0})
@@ -137,11 +164,11 @@ export default function ProductCard({ product }) {
       <div className="px-4 pb-4 pt-1 flex items-center justify-between border-t border-stone-100 mt-2">
         <div className="flex items-baseline gap-2">
           <span className="text-base font-semibold text-stone-900">
-            ₹{product.price?.toLocaleString("en-IN")}
+            ₹{product.price?.toLocaleString('en-IN')}
           </span>
           {product.originalPrice && product.originalPrice > product.price && (
             <span className="text-xs text-stone-400 line-through font-light">
-              ₹{product.originalPrice?.toLocaleString("en-IN")}
+              ₹{product.originalPrice?.toLocaleString('en-IN')}
             </span>
           )}
         </div>
@@ -149,12 +176,12 @@ export default function ProductCard({ product }) {
         <button
           onClick={handleAddToCart}
           className={`text-xs font-semibold tracking-wider transition-colors uppercase border-b pb-0.5 ${
-            isInCart
-              ? "text-stone-900 border-stone-900" // ✅ Solid style when in cart
-              : "text-amber-900 hover:text-stone-900 border-amber-900/40 hover:border-stone-900"
+            isInCart 
+              ? 'text-stone-900 border-stone-900'
+              : 'text-amber-900 hover:text-stone-900 border-amber-900/40 hover:border-stone-900'
           }`}
         >
-          {isInCart ? `In Cart (${qtyInCart})` : "+ Add"}
+          {isInCart ? `In Cart (${qtyInCart})` : '+ Add'}
         </button>
       </div>
     </div>

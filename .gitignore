@@ -15,6 +15,12 @@ node_modules/
 dist/
 dist-ssr/
 .vite/
+build/
+coverage/
+.coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Logs and local OS/editor files
 *.log

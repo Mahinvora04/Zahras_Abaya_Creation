@@ -7,14 +7,13 @@ const useCartStore = create((set, get) => ({
   loading: false,
   error: null,
 
-  // Fetch cart from MongoDB
   fetchCart: async () => {
     set({ loading: true, error: null });
     try {
       const { data } = await api.get("/cart");
       set({
-        items: data.cart.items || [],
-        cartId: data.cart._id,
+        items: data.cart?.items || [],
+        cartId: data.cart?._id || null,
         loading: false,
       });
     } catch (err) {
@@ -23,19 +22,16 @@ const useCartStore = create((set, get) => ({
     }
   },
 
-  // Add item to cart (syncs with MongoDB)
-  addItem: async (product) => {
+  addItem: async (product, qty = 1) => {
     set({ loading: true, error: null });
     try {
       await api.post("/cart/items", {
         product_id: product._id,
-        quantity: 1,
+        quantity: Number(qty),
         selectedVariant: product.selectedVariant || null,
+        variant_id: product.variant_id || product.selectedVariant?.variant_id || null,
       });
-
-      // Refresh cart from DB
       await get().fetchCart();
-
       return { success: true };
     } catch (err) {
       const msg = err.response?.data?.detail || "Failed to add item";
@@ -44,29 +40,34 @@ const useCartStore = create((set, get) => ({
     }
   },
 
-  // Update item quantity
-  updateQty: async (productId, quantity) => {
+  updateQty: async (productId, variantId, quantity) => {
     set({ loading: true, error: null });
     try {
-      await api.put(`/cart/items/${productId}`, { quantity });
+      if (quantity <= 0) {
+        await api.delete(`/cart/items/${productId}`, { params: { variant_id: variantId || undefined } });
+      } else {
+        await api.put(`/cart/items/${productId}`, {
+          quantity: Number(quantity),
+        }, { params: { variant_id: variantId || undefined } });
+      }
       await get().fetchCart();
     } catch (err) {
+      console.error("Update qty error:", err);
       set({ error: "Failed to update quantity", loading: false });
     }
   },
 
-  // Remove item
-  removeItem: async (productId) => {
+  removeItem: async (productId, variantId) => {
     set({ loading: true, error: null });
     try {
-      await api.delete(`/cart/items/${productId}`);
+      await api.delete(`/cart/items/${productId}`, { params: { variant_id: variantId || undefined } });
       await get().fetchCart();
     } catch (err) {
+      console.error("Remove item error:", err);
       set({ error: "Failed to remove item", loading: false });
     }
   },
 
-  // Clear entire cart
   clearCart: async () => {
     set({ loading: true, error: null });
     try {
@@ -77,26 +78,29 @@ const useCartStore = create((set, get) => ({
     }
   },
 
-  // Get total price
   getTotal: () => {
     return get().items.reduce((total, item) => {
       const price = item.product?.price || item.price || 0;
-      return total + price * item.quantity;
+      const qty = Number(item.quantity) || 0;
+      return total + price * qty;
     }, 0);
   },
 
-  // Get total items count
   getTotalItems: () => {
-    return get().items.reduce((count, item) => count + item.quantity, 0);
+    return get().items.reduce(
+      (count, item) => count + (Number(item.quantity) || 0),
+      0,
+    );
   },
 
-  updateVariant: async (productId, variant) => {
+  updateVariant: async (productId, currentVariantId, variant) => {
     set({ loading: true, error: null });
     try {
-      await api.put(`/api/cart/items/${productId}`, {
+      await api.put(`/cart/items/${productId}`, {
         selectedVariant: variant,
-      });
-      await get().fetchCart(); // Refresh to get updated prices/data
+        variant_id: variant?.variant_id || null,
+      }, { params: { variant_id: currentVariantId || undefined } });
+      await get().fetchCart();
     } catch (err) {
       console.error("Update variant error:", err);
       set({ error: "Failed to update variant", loading: false });
