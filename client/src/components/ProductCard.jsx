@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import useAuthStore from '../store/authStore';
 import useCartStore from '../store/cartStore';
+import { getProductSlug } from '../utils/productSlug';
 
 export default function ProductCard({ product }) {
   const addItem = useCartStore((s) => s.addItem);
@@ -12,6 +13,7 @@ export default function ProductCard({ product }) {
   const location = useLocation();
 
   if (!product) return null;
+  const productSlug = getProductSlug(product);
 
   const defaultVariant =
     product.variants?.find((variant) => variant.variant_id === product.defaultVariantId) ||
@@ -87,7 +89,7 @@ export default function ProductCard({ product }) {
       <div>
         {/* Image Container with Dual Image Swap */}
         <div className="relative aspect-[3/4] w-full overflow-hidden bg-stone-100">
-          <Link to={`/product/${product._id}`} className="block w-full h-full">
+          <Link to={`/product/${productSlug}`} className="block w-full h-full">
             <img
               src={mainImage}
               alt={product.name}
@@ -121,7 +123,7 @@ export default function ProductCard({ product }) {
           {/* Quick Action Floating Icons */}
           <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
             <Link
-              to={`/product/${product._id}`}
+              to={`/product/${productSlug}`}
               aria-label="Quick View"
               className="p-2 rounded-full bg-white/90 text-stone-700 hover:bg-stone-900 hover:text-white backdrop-blur-md transition-colors shadow-sm"
             >
@@ -154,7 +156,7 @@ export default function ProductCard({ product }) {
             </span>
           )}
 
-          <Link to={`/product/${product._id}`} className="block group/title">
+          <Link to={`/product/${productSlug}`} className="block group/title">
             <h3 className="font-serif text-base text-stone-900 line-clamp-1 group-hover/title:text-amber-800 transition-colors font-medium">
               {product.name}
             </h3>

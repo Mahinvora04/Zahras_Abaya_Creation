@@ -7,6 +7,8 @@ const useCartStore = create((set, get) => ({
   loading: false,
   error: null,
 
+  resetCart: () => set({ items: [], cartId: null, loading: false, error: null }),
+
   fetchCart: async () => {
     set({ loading: true, error: null });
     try {

@@ -17,14 +17,14 @@ import ProductReviews from "../components/ProductReviews";
 
 // Main component handles fetching and loading states
 export default function ProductDetail() {
-  const { id } = useParams();
+  const { slug } = useParams();
   const { currentProduct, fetchProduct, loading } = useProductStore();
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchProduct(id);
+    fetchProduct(slug);
     return () => useProductStore.getState().clearCurrent();
-  }, [id, fetchProduct]);
+  }, [slug, fetchProduct]);
 
   if (loading) {
     return (
@@ -93,11 +93,26 @@ function ProductDetailInner({ product }) {
     : null;
 
   const displayPrice = selectedVariant?.price ?? product.price;
-  const displayOriginalPrice = selectedVariant?.price
-    ? (selectedVariant.originalPrice ?? product.originalPrice)
-    : product.originalPrice;
-  const displayStock = selectedVariant?.stock ?? product.stock;
-  const isOutOfStock = displayStock <= 0;
+  const displayOriginalPrice =
+    selectedVariant?.originalPrice ?? product.originalPrice;
+  const selectedImages =
+    selectedVariant?.images?.length > 0
+      ? selectedVariant.images
+      : product.images || [];
+  const discount =
+    displayOriginalPrice > displayPrice
+      ? Math.round(
+          ((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100,
+        )
+      : 0;
+  const isOutOfStock = selectedVariant
+    ? selectedVariant.isAvailable === false
+    : product.isAvailable === false || product.stock === 0;
+  const productReviews = product.reviews || [];
+  const reviewCount = productReviews.length;
+  const reviewRating = reviewCount
+    ? productReviews.reduce((total, review) => total + Number(review.rating || 0), 0) / reviewCount
+    : 0;
   const selectedCartItem = cartItems.find((item) => {
     if (item.product_id !== product._id) return false;
     if (!selectedVariant) return !item.variant_id && !item.selectedVariant;
@@ -267,7 +282,7 @@ function ProductDetailInner({ product }) {
                   <Star
                     key={i}
                     className={`w-4 h-4 ${
-                      i < Math.floor(product.rating || 5)
+                      i < Math.floor(reviewRating)
                         ? "fill-current"
                         : "text-stone-300"
                     }`}
@@ -275,10 +290,10 @@ function ProductDetailInner({ product }) {
                 ))}
               </div>
               <span className="text-sm text-stone-600 font-medium">
-                {product.rating || "5.0"}
+                {reviewRating.toFixed(1)}
               </span>
               <span className="text-sm text-stone-400">
-                ({product.numReviews || 0} Reviews)
+                ({reviewCount} Reviews)
               </span>
             </div>
 
@@ -421,7 +436,7 @@ function ProductDetailInner({ product }) {
                 Description
               </h3>
               <p className="text-stone-600 leading-relaxed font-light">
-                {selectedVariant?.description}
+                {selectedVariant?.description || product.description}
               </p>
             </div>
 

@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import ProductCard from "../components/ProductCard";
 import useCartStore from "../store/cartStore";
+import { getProductSlug } from "../utils/productSlug";
 import { useEffect, useState } from "react";
 
 export default function Cart() {
@@ -94,6 +95,7 @@ export default function Cart() {
               const imageSrc = item.selectedVariant?.images?.[0] || "/images/placeholder.jpg";
               const price = item.selectedVariant?.price ?? 0;
               const quantity = item.quantity || 1;
+              const productSlug = getProductSlug(product);
 
               return (
                 <div
@@ -102,7 +104,7 @@ export default function Cart() {
                 >
                   {/* Image */}
                   <Link
-                    to={`/product/${item.product_id}`}
+                    to={`/product/${productSlug}`}
                     className="w-24 h-28 bg-stone-100 rounded-sm overflow-hidden shrink-0 block"
                   >
                     <img
@@ -115,7 +117,7 @@ export default function Cart() {
                   {/* Info */}
                   <div className="flex-1 flex flex-col justify-between">
                     <div>
-                      <Link to={`/product/${item.product_id}`}>
+                      <Link to={`/product/${productSlug}`}>
                         <h3 className="font-serif text-lg text-stone-900 font-medium hover:text-amber-800 transition-colors">
                           {product.name || "Product"}
                         </h3>
