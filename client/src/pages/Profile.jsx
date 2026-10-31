@@ -228,12 +228,15 @@ export default function Profile() {
                   </label>
                   <input
                     type="email"
-                    value={user.email}
+                    value={user.email || ""}
+                    placeholder={user.phone ? "No email on this account" : ""}
                     disabled
                     className="w-full px-3 py-2.5 text-sm bg-stone-100 border border-stone-200 rounded-sm text-stone-500 cursor-not-allowed"
                   />
                   <p className="text-[10px] text-stone-400 mt-1.5">
-                    Contact support to change your email
+                    {user.email
+                      ? "Contact support to change your email"
+                      : "This account uses a phone number to sign in"}
                   </p>
                 </div>
 

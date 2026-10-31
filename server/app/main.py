@@ -1,5 +1,10 @@
 import os
+import re
+import logging
 from datetime import datetime, timedelta
+from google.auth.exceptions import GoogleAuthError
+from google.auth.transport.requests import Request as GoogleRequest
+from google.oauth2 import id_token as google_id_token
 from fastapi import FastAPI, HTTPException, Depends, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -9,15 +14,34 @@ from jose import jwt, JWTError
 from dotenv import load_dotenv
 from typing import List, Optional
 from bson import ObjectId  # Added for ObjectId handling
+from starlette.concurrency import run_in_threadpool
+
+logger = logging.getLogger(__name__)
 
 # 1. Load Environment & Setup
 load_dotenv()
 app = FastAPI(title="Zahra's Abaya API")
 
+@app.on_event("startup")
+async def ensure_google_subject_index():
+    await db.users.create_index(
+        "google_sub",
+        unique=True,
+        partialFilterExpression={"google_sub": {"$type": "string"}},
+    )
+
 # CORS
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # ✅ Specific origins
+    allow_origins=cors_origins,
     allow_credentials=True,  # ✅ MUST be True for cookies
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -53,15 +77,27 @@ def serialize_doc(doc: dict) -> dict:
             result[key] = value
     return result
 
+def serialize_user(user: dict) -> dict:
+    """Serialize a user without returning credentials or internal identity keys."""
+    result = serialize_doc(user)
+    if result:
+        result.pop("password", None)
+        result.pop("google_sub", None)
+    return result
+
 # 2. Minimal Request Models
 class RegisterReq(BaseModel):
     name: str
     email: EmailStr
     password: str
+    phone: Optional[str] = None
 
 class LoginReq(BaseModel):
     email: EmailStr
     password: str
+
+class GoogleLoginReq(BaseModel):
+    credential: str
 
 class ProductReq(BaseModel):
     name: str
@@ -115,6 +151,31 @@ def create_token(user_id: str):
     expires = datetime.utcnow() + timedelta(days=int(os.getenv("JWT_EXPIRES_IN_DAYS", 7)))
     return jwt.encode({"sub": user_id, "exp": expires}, SECRET_KEY, algorithm=ALGORITHM)
 
+def normalize_indian_phone(value: str):
+    """Normalize an optional Indian mobile number for profile/contact use."""
+    value = value.strip()
+    compact = "".join(char for char in value if char not in " ()-.")
+    if compact.startswith("00"):
+        compact = "+" + compact[2:]
+
+    if compact.startswith("+"):
+        if not compact.startswith("+91"):
+            raise HTTPException(status_code=400, detail="Use an Indian mobile number")
+        digits = compact[3:]
+    elif len(compact) == 12 and compact.startswith("91"):
+        digits = compact[2:]
+    else:
+        digits = compact
+
+    if (
+        len(digits) != 10
+        or not digits.isascii()
+        or not digits.isdigit()
+        or digits[0] not in "6789"
+    ):
+        raise HTTPException(status_code=400, detail="Enter a valid 10-digit Indian mobile number")
+    return "+91" + digits
+
 def set_cookie(response: Response, token: str):
     # Force secure=False for localhost development
     is_prod = os.getenv("ENVIRONMENT") == "production"
@@ -149,7 +210,7 @@ async def get_current_user(request: Request):
         
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
-        return serialize_doc(user)
+        return serialize_user(user)
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
     except Exception as e:
@@ -170,29 +231,101 @@ async def get_admin_user(current_user: dict = Depends(get_current_user)):
 async def register(req: RegisterReq, response: Response):
     if len(req.password) < 6:
         raise HTTPException(status_code=400, detail="Password must be 6+ chars")
-    
-    if await db.users.find_one({"email": req.email}):
-        raise HTTPException(status_code=400, detail="User already exists")
+
+    email = str(req.email).lower()
+    email_query = {"$regex": f"^{re.escape(email)}$", "$options": "i"}
+    if await db.users.find_one({"email": email_query}):
+        raise HTTPException(status_code=400, detail="An account with this email already exists")
+
+    phone = normalize_indian_phone(req.phone) if req.phone and req.phone.strip() else None
     
     hashed_pw = pwd_context.hash(req.password)
-    user_doc = {"name": req.name, "email": req.email, "password": hashed_pw, "role": "user"}
+    user_doc = {
+        "name": req.name,
+        "email": email,
+        "phone": phone,
+        "phone_verified": False,
+        "password": hashed_pw,
+        "role": "user",
+    }
     result = await db.users.insert_one(user_doc)
     
     token = create_token(str(result.inserted_id))
     set_cookie(response, token)
     
-    return {"success": True, "user": {"_id": str(result.inserted_id), "name": req.name, "email": req.email, "role": "user"}}
+    return {"success": True, "user": {"_id": str(result.inserted_id), "name": req.name, "email": email, "phone": phone, "phone_verified": False, "role": "user"}}
 
 @app.post("/api/auth/login")
 async def login(req: LoginReq, response: Response):
-    user = await db.users.find_one({"email": req.email})
-    if not user or not pwd_context.verify(req.password, user["password"]):
+    email = str(req.email).lower()
+    email_query = {"$regex": f"^{re.escape(email)}$", "$options": "i"}
+    user = await db.users.find_one({"email": email_query})
+    if not user or not user.get("password") or not pwd_context.verify(req.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
     token = create_token(str(user["_id"]))
     set_cookie(response, token)
     
-    return {"success": True, "user": serialize_doc(user)}
+    return {"success": True, "user": serialize_user(user)}
+
+@app.post("/api/auth/google")
+async def google_login(req: GoogleLoginReq, response: Response):
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    if not client_id:
+        raise HTTPException(status_code=503, detail="Google sign-in is not configured")
+
+    try:
+        claims = await run_in_threadpool(
+            google_id_token.verify_oauth2_token,
+            req.credential,
+            GoogleRequest(),
+            audience=client_id,
+            clock_skew_in_seconds=30,
+        )
+    except ValueError as exc:
+        logger.warning("Google ID token verification failed: %s", exc)
+        raise HTTPException(status_code=401, detail="Invalid Google sign-in credential")
+    except GoogleAuthError:
+        raise HTTPException(status_code=503, detail="Could not verify Google sign-in")
+
+    google_sub = claims.get("sub")
+    email = claims.get("email", "").strip().lower()
+    if not google_sub or not email or claims.get("email_verified") is not True:
+        raise HTTPException(status_code=401, detail="Google did not provide a verified email address")
+
+    user = await db.users.find_one({"google_sub": google_sub})
+    if not user:
+        email_query = {"$regex": f"^{re.escape(email)}$", "$options": "i"}
+        user = await db.users.find_one({"email": email_query})
+
+        if user:
+            linked_sub = user.get("google_sub")
+            if linked_sub and linked_sub != google_sub:
+                raise HTTPException(status_code=409, detail="This account is linked to a different Google account")
+            if not linked_sub:
+                link_result = await db.users.update_one(
+                    {"_id": user["_id"], "google_sub": {"$in": [None, google_sub]}},
+                    {"$set": {"google_sub": google_sub}},
+                )
+                if link_result.matched_count == 0:
+                    raise HTTPException(status_code=409, detail="This account is linked to a different Google account")
+                user["google_sub"] = google_sub
+        else:
+            user_doc = {
+                "name": claims.get("name") or email.split("@", 1)[0],
+                "email": email,
+                "phone": None,
+                "phone_verified": False,
+                "google_sub": google_sub,
+                "role": "user",
+            }
+            result = await db.users.insert_one(user_doc)
+            user_doc["_id"] = result.inserted_id
+            user = user_doc
+
+    token = create_token(str(user["_id"]))
+    set_cookie(response, token)
+    return {"success": True, "user": serialize_user(user)}
 
 @app.get("/api/auth/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
@@ -358,13 +491,16 @@ async def update_profile(req: ProfileUpdateReq, current_user: dict = Depends(get
     update_data = req.model_dump(exclude_unset=True)
     if not update_data:
         raise HTTPException(status_code=400, detail="No data provided for update")
+
+    if update_data.get("phone"):
+        update_data["phone"] = normalize_indian_phone(update_data["phone"])
     
     await db.users.update_one(
         {"_id": ObjectId(current_user["_id"])},
         {"$set": update_data}
     )
     updated_user = await db.users.find_one({"_id": ObjectId(current_user["_id"])})
-    return {"success": True, "user": serialize_doc(updated_user)}
+    return {"success": True, "user": serialize_user(updated_user)}
 
 
 @app.post("/api/users/me/addresses")
@@ -390,7 +526,7 @@ async def add_address(req: AddressReq, current_user: dict = Depends(get_current_
         {"$push": {"addresses": new_address}}
     )
     updated_user = await db.users.find_one({"_id": user_id})
-    return {"success": True, "user": serialize_doc(updated_user)}
+    return {"success": True, "user": serialize_user(updated_user)}
 
 
 @app.put("/api/users/me/addresses/{address_id}")
@@ -420,7 +556,7 @@ async def update_address(address_id: str, req: AddressUpdateReq, current_user: d
         raise HTTPException(status_code=404, detail="Address not found")
         
     updated_user = await db.users.find_one({"_id": user_id})
-    return {"success": True, "user": serialize_doc(updated_user)}
+    return {"success": True, "user": serialize_user(updated_user)}
 
 
 @app.delete("/api/users/me/addresses/{address_id}")
@@ -450,7 +586,7 @@ async def delete_address(address_id: str, current_user: dict = Depends(get_curre
             )
             
     final_user = await db.users.find_one({"_id": user_id})
-    return {"success": True, "user": serialize_doc(final_user)}
+    return {"success": True, "user": serialize_user(final_user)}
 
 # ==========================================
 # CART (Protected)
