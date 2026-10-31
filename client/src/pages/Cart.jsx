@@ -73,8 +73,8 @@ export default function Cart() {
             {items.map((item) => {
               // ✅ Safely access product data
               const product = item.product || {};
-              const imageSrc = product.images?.[0] || "/images/placeholder.jpg";
-              const price = item.selectedVariant?.price ?? product.price ?? 0;
+              const imageSrc = item.selectedVariant?.images?.[0] || "/images/placeholder.jpg";
+              const price = item.selectedVariant?.price ?? 0;
               const quantity = item.quantity || 1;
 
               return (

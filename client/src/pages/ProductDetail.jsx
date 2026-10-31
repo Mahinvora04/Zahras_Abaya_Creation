@@ -66,7 +66,8 @@ function ProductDetailInner({ product }) {
 
   // ✅ Safely find the first available variant for initial state
   const firstVariant =
-    product.variants?.find((v) => v.isAvailable) || product.variants?.[0];
+    product.variants?.find((v) => v.variant_id === product.defaultVariantId) ||
+    product.variants?.[0];
 
   // ✅ Initialize state directly from props. No useEffect needed!
   const [selectedColor, setSelectedColor] = useState(
@@ -75,7 +76,7 @@ function ProductDetailInner({ product }) {
   const [selectedSize, setSelectedSize] = useState(firstVariant?.size || null);
   const [quantity, setQuantity] = useState(1);
   const [mainImage, setMainImage] = useState(
-    firstVariant?.images?.[0] || product.images?.[0] || "",
+    firstVariant?.images?.[0] || "",
   );
   const [isAdding, setIsAdding] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
@@ -90,13 +91,14 @@ function ProductDetailInner({ product }) {
         (v) => v.color === selectedColor && v.size === selectedSize,
       )
     : null;
+  const selectedImages = selectedVariant?.images || [];
 
-  const displayPrice = selectedVariant?.price ?? product.price;
-  const displayOriginalPrice = selectedVariant?.price
-    ? (selectedVariant.originalPrice ?? product.originalPrice)
-    : product.originalPrice;
-  const displayStock = selectedVariant?.stock ?? product.stock;
-  const isOutOfStock = displayStock <= 0;
+  const displayPrice = selectedVariant?.price ?? 0;
+  const displayOriginalPrice = selectedVariant?.originalPrice;
+  const discount = displayOriginalPrice > displayPrice
+    ? Math.round(((displayOriginalPrice - displayPrice) / displayOriginalPrice) * 100)
+    : 0;
+  const isOutOfStock = !selectedVariant?.isAvailable;
 
   const availableColors = hasVariants
     ? [
@@ -112,7 +114,7 @@ function ProductDetailInner({ product }) {
     ? product.variants
         .filter((v) => v.color === selectedColor && v.isAvailable)
         .map((v) => v.size)
-    : product.variantOptions?.sizes || [];
+    : [];
 
   const handleColorSelect = (colorObj) => {
     setSelectedColor(colorObj.color);
@@ -128,7 +130,7 @@ function ProductDetailInner({ product }) {
     if (colorObj.images && colorObj.images.length > 0) {
       setMainImage(colorObj.images[0]);
     } else {
-      setMainImage(product.images?.[0] || "");
+      setMainImage(product.variants?.find((v) => v.color === colorObj.color)?.images?.[0] || "");
     }
   };
 
@@ -152,7 +154,7 @@ function ProductDetailInner({ product }) {
       _id: product._id,
       name: product.name,
       price: displayPrice,
-      images: product.images,
+      images: selectedImages,
       selectedVariant: selectedVariant
         ? {
             variant_id: selectedVariant.variant_id,
@@ -202,16 +204,16 @@ function ProductDetailInner({ product }) {
                 alt={product.name}
                 className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105"
               />
-              {product.discount > 0 && (
+              {discount > 0 && (
                 <span className="absolute top-4 left-4 bg-stone-900 text-amber-200 text-xs font-medium tracking-widest uppercase px-3 py-1.5">
-                  -{product.discount}% OFF
+                  -{discount}% OFF
                 </span>
               )}
             </div>
 
-            {product.images && product.images.length > 1 && (
+            {selectedImages.length > 1 && (
               <div className="grid grid-cols-4 gap-3">
-                {product.images.map((img, idx) => (
+                {selectedImages.map((img, idx) => (
                   <button
                     key={idx}
                     onClick={() => setMainImage(img)}
@@ -318,15 +320,19 @@ function ProductDetailInner({ product }) {
                       </span>
                     </span>
                     <div className="flex flex-wrap gap-3">
-                      {(product.variantOptions?.sizes || availableSizes).map(
-                        (size) => {
+                      {availableSizes.map((size) => {
                           const isAvailable = availableSizes.includes(size);
                           return (
                             <button
                               key={size}
-                              onClick={() =>
-                                isAvailable && setSelectedSize(size)
-                              }
+                              onClick={() => {
+                                if (!isAvailable) return;
+                                setSelectedSize(size);
+                                const variant = product.variants.find(
+                                  (item) => item.color === selectedColor && item.size === size,
+                                );
+                                if (variant?.images?.[0]) setMainImage(variant.images[0]);
+                              }}
                               disabled={!isAvailable}
                               className={`min-w-[3rem] h-10 px-3 rounded-sm border text-sm font-medium transition-all ${
                                 selectedSize === size
@@ -359,9 +365,7 @@ function ProductDetailInner({ product }) {
                   {quantity}
                 </span>
                 <button
-                  onClick={() =>
-                    setQuantity(Math.min(displayStock, quantity + 1))
-                  }
+                  onClick={() => setQuantity(quantity + 1)}
                   className="p-3 text-stone-600 hover:bg-stone-100 transition-colors"
                 >
                   <Plus className="w-4 h-4" />
@@ -398,7 +402,7 @@ function ProductDetailInner({ product }) {
                 Description
               </h3>
               <p className="text-stone-600 leading-relaxed font-light">
-                {product.description}
+                {selectedVariant?.description}
               </p>
             </div>
 

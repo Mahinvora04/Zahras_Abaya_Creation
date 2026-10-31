@@ -80,7 +80,7 @@ const useCartStore = create((set, get) => ({
 
   getTotal: () => {
     return get().items.reduce((total, item) => {
-      const price = item.product?.price || item.price || 0;
+      const price = item.selectedVariant?.price ?? item.price ?? 0;
       const qty = Number(item.quantity) || 0;
       return total + price * qty;
     }, 0);

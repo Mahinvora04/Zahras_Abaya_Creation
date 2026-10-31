@@ -14,6 +14,7 @@ from jose import jwt, JWTError
 from dotenv import load_dotenv
 from typing import List, Optional
 from bson import ObjectId  # Added for ObjectId handling
+from uuid import uuid4
 from starlette.concurrency import run_in_threadpool
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,53 @@ def serialize_doc(doc: dict) -> dict:
             result[key] = value
     return result
 
+def build_product_doc(req: "ProductReq", existing: Optional[dict] = None) -> dict:
+    """Build a product with shared identity fields and variant-owned details."""
+    fields = req.model_dump(exclude_unset=True)
+    if fields.get("variants") is not None:
+        variants = fields["variants"]
+    elif existing and existing.get("variants"):
+        variants = [dict(variant) for variant in existing["variants"]]
+        default_id = existing.get("defaultVariantId")
+        default_variant = next((v for v in variants if v.get("variant_id") == default_id), variants[0])
+        for field in ("description", "price", "originalPrice", "images", "color", "colorHex", "size", "sku", "isAvailable"):
+            if field in fields and fields[field] is not None:
+                default_variant[field] = fields[field]
+    else:
+        variants = [{
+            "variant_id": str(uuid4()),
+            "sku": fields.get("sku"),
+            "size": fields.get("size") or "One Size",
+            "color": fields.get("color") or "Default",
+            "colorHex": fields.get("colorHex"),
+            "description": fields.get("description", ""),
+            "price": fields.get("price", 0),
+            "originalPrice": fields.get("originalPrice"),
+            "images": fields.get("images", []),
+            "isAvailable": fields.get("isAvailable", True),
+        }]
+
+    for variant in variants:
+        variant.setdefault("variant_id", str(uuid4()))
+        variant.setdefault("isAvailable", True)
+        variant.pop("stock", None)
+        variant.pop("discount", None)
+    if not variants:
+        raise HTTPException(status_code=400, detail="A product must have at least one variant")
+
+    product_doc = dict(existing or {})
+    product_doc.pop("_id", None)
+    for field in ("description", "price", "originalPrice", "images", "stock", "discount", "variantOptions"):
+        product_doc.pop(field, None)
+    product_doc.update({
+        "name": fields.get("name", product_doc.get("name")),
+        "category": fields.get("category", product_doc.get("category")),
+        "featured": fields.get("featured", product_doc.get("featured", False)),
+        "variants": variants,
+        "defaultVariantId": variants[0]["variant_id"],
+    })
+    return product_doc
+
 def serialize_user(user: dict) -> dict:
     """Serialize a user without returning credentials or internal identity keys."""
     result = serialize_doc(user)
@@ -101,14 +149,18 @@ class GoogleLoginReq(BaseModel):
 
 class ProductReq(BaseModel):
     name: str
-    description: str
-    price: float
+    category: str
+    description: Optional[str] = None
+    price: Optional[float] = None
     originalPrice: Optional[float] = None
-    category: str  # Stores the Category ID string
-    images: List[str]
-    stock: int = 0
+    images: Optional[List[str]] = None
     featured: bool = False
-    discount: float = 0.0
+    color: Optional[str] = None
+    colorHex: Optional[str] = None
+    size: Optional[str] = None
+    sku: Optional[str] = None
+    isAvailable: Optional[bool] = None
+    variants: Optional[List[dict]] = None
 
 class ProfileUpdateReq(BaseModel):
     name: Optional[str] = None
@@ -370,7 +422,8 @@ async def get_products(
     # 2. Get Available Filters (based on base query)
     price_agg = await db.products.aggregate([
         {"$match": base_query},
-        {"$group": {"_id": None, "minPrice": {"$min": "$price"}, "maxPrice": {"$max": "$price"}}}
+        {"$unwind": "$variants"},
+        {"$group": {"_id": None, "minPrice": {"$min": "$variants.price"}, "maxPrice": {"$max": "$variants.price"}}}
     ]).to_list(length=1)
     
     min_p = price_agg[0]["minPrice"] if price_agg and price_agg[0].get("minPrice") is not None else 0
@@ -391,18 +444,21 @@ async def get_products(
 
     # 3. Apply specific filters
     final_query = base_query.copy()
+    variant_conditions = {}
     if minPrice is not None:
-        final_query.setdefault("price", {})["$gte"] = minPrice
+        variant_conditions.setdefault("price", {})["$gte"] = minPrice
     if maxPrice is not None:
-        final_query.setdefault("price", {})["$lte"] = maxPrice
+        variant_conditions.setdefault("price", {})["$lte"] = maxPrice
     if sizes and sizes.strip():
-        final_query["variants.size"] = {"$in": [s.strip() for s in sizes.split(",")]}
+        variant_conditions["size"] = {"$in": [s.strip() for s in sizes.split(",")]}
     if colors and colors.strip():
-        final_query["variants.color"] = {"$in": [c.strip() for c in colors.split(",")]}
+        variant_conditions["color"] = {"$in": [c.strip() for c in colors.split(",")]}
+    if variant_conditions:
+        final_query["variants"] = {"$elemMatch": variant_conditions}
     
     # 4. Sorting
     sort_order = -1 if sort in ["newest", "price-high", "rating"] else 1
-    sort_field = "price" if "price" in sort else ("rating" if sort == "rating" else "_id")
+    sort_field = "variants.price" if "price" in sort else ("rating" if sort == "rating" else "_id")
     
     # 5. Pagination Logic
     total_count = await db.products.count_documents(final_query)
@@ -445,17 +501,23 @@ async def get_product(product_id: str):
 # --- ADMIN (Protected) ---
 @app.post("/api/admin/products")
 async def create_product(req: ProductReq, admin: dict = Depends(get_admin_user)):
-    product_doc = req.model_dump()
+    product_doc = build_product_doc(req)
     result = await db.products.insert_one(product_doc)
     product_doc["_id"] = str(result.inserted_id)
     return {"success": True, "product": product_doc}
 
 @app.put("/api/admin/products/{product_id}")
 async def update_product(product_id: str, req: ProductReq, admin: dict = Depends(get_admin_user)):
-    await db.products.update_one({"_id": product_id}, {"$set": req.model_dump()})
-    updated = await db.products.find_one({"_id": product_id})
-    if not updated:
+    try:
+        object_id = ObjectId(product_id)
+    except Exception:
         raise HTTPException(status_code=404, detail="Product not found")
+    existing = await db.products.find_one({"_id": object_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Product not found")
+    product_doc = build_product_doc(req, existing)
+    await db.products.update_one({"_id": object_id}, {"$set": product_doc})
+    updated = await db.products.find_one({"_id": object_id})
     return {"success": True, "product": serialize_doc(updated)}
 
 @app.delete("/api/admin/products/{product_id}")
@@ -664,6 +726,8 @@ async def add_to_cart(
                 v.get("size") == cart_item.selectedVariant.get("size")), None)
         if selected is None:
             raise HTTPException(status_code=400, detail="A valid product variant is required")
+        if not selected.get("isAvailable", True):
+            raise HTTPException(status_code=409, detail="This variant is unavailable")
         variant_id = selected["variant_id"]
         cart_item.selectedVariant = {**(cart_item.selectedVariant or {}), **selected}
     elif variant_id:

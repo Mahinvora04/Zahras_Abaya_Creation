@@ -53,24 +53,26 @@ export default function AdminProducts() {
                 <th className="p-3 text-left">Name</th>
                 <th className="p-3 text-left">Category</th>
                 <th className="p-3 text-left">Price</th>
-                <th className="p-3 text-left">Stock</th>
+                <th className="p-3 text-left">Availability</th>
                 <th className="p-3 text-left">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {products.map((p) => (
+              {products.map((p) => {
+                const variant = p.variants?.find((v) => v.variant_id === p.defaultVariantId) || p.variants?.[0] || {};
+                return (
                 <tr key={p._id} className="border-t">
                   <td className="p-3">
                     <img
-                      src={p.images[0]}
+                      src={variant.images?.[0] || "/images/placeholder.jpg"}
                       alt={p.name}
                       className="w-12 h-12 object-cover rounded"
                     />
                   </td>
                   <td className="p-3">{p.name}</td>
                   <td className="p-3">{p.category}</td>
-                  <td className="p-3">₹{p.price}</td>
-                  <td className="p-3">{p.stock}</td>
+                  <td className="p-3">₹{variant.price ?? "—"}</td>
+                  <td className="p-3">{variant.isAvailable ? "Available" : "Unavailable"}</td>
                   <td className="p-3 flex gap-2">
                     <Link
                       to={`/admin/products/edit/${p._id}`}
@@ -86,7 +88,8 @@ export default function AdminProducts() {
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -417,7 +417,7 @@ export default function Checkout() {
                   const price =
                     item.selectedVariant?.price !== undefined
                       ? item.selectedVariant.price
-                      : product.price || 0;
+                      : 0;
 
                   return (
                     <div
@@ -425,7 +425,7 @@ export default function Checkout() {
                       className="flex flex-col sm:flex-row gap-4 items-start sm:items-center border-b border-stone-100 pb-6 last:border-0 last:pb-0"
                     >
                       <img
-                        src={product.images?.[0] || "/images/placeholder.jpg"}
+                        src={item.selectedVariant?.images?.[0] || "/images/placeholder.jpg"}
                         alt={product.name}
                         className="w-20 h-24 object-cover object-top bg-stone-100 rounded-sm"
                       />

@@ -13,11 +13,18 @@ export default function ProductCard({ product }) {
 
   if (!product) return null;
 
-  const mainImage = product.images?.[0] || '/images/placeholder.jpg';
-  const secondaryImage = product.images?.[1] || mainImage;
+  const defaultVariant =
+    product.variants?.find((variant) => variant.variant_id === product.defaultVariantId) ||
+    product.variants?.[0] ||
+    null;
+  const variantImages = defaultVariant?.images || [];
+  const mainImage = variantImages[0] || '/images/placeholder.jpg';
+  const secondaryImage = variantImages[1] || mainImage;
+  const discount = defaultVariant?.originalPrice > defaultVariant?.price
+    ? Math.round(((defaultVariant.originalPrice - defaultVariant.price) / defaultVariant.originalPrice) * 100)
+    : 0;
 
   // ✅ Get the default variant (first one)
-  const defaultVariant = product.variants?.[0] || null;
   
   // ✅ Check if the DEFAULT variant is already in cart
   const defaultVariantInCart = cartItems.find(item => {
@@ -25,8 +32,7 @@ export default function ProductCard({ product }) {
     
     if (defaultVariant) {
       return (
-        item.selectedVariant?.color === defaultVariant.color &&
-        item.selectedVariant?.size === defaultVariant.size
+        item.variant_id === defaultVariant.variant_id
       );
     }
     // If no variants, just match by product_id and null selectedVariant
@@ -49,18 +55,23 @@ export default function ProductCard({ product }) {
       navigate('/login', { state: { from: location.pathname } });
       return;
     }
+    if (!defaultVariant?.isAvailable) return;
 
     // ✅ Always allow adding - backend will handle variants correctly
     const itemToAdd = {
       _id: product._id,
       name: product.name,
-      price: defaultVariant ? defaultVariant.price : product.price,
-      images: product.images,
+      price: defaultVariant?.price,
+      images: variantImages,
       selectedVariant: defaultVariant ? {
+        variant_id: defaultVariant.variant_id,
         color: defaultVariant.color,
         size: defaultVariant.size,
         sku: defaultVariant.sku,
-        price: defaultVariant.price
+        price: defaultVariant.price,
+        originalPrice: defaultVariant.originalPrice,
+        description: defaultVariant.description,
+        images: variantImages,
       } : null
     };
 
@@ -79,10 +90,10 @@ export default function ProductCard({ product }) {
               src={mainImage}
               alt={product.name}
               className={`w-full h-full object-cover object-top transition-all duration-700 ease-out group-hover:scale-105 ${
-                product.images?.[1] ? 'group-hover:opacity-0' : ''
+                variantImages[1] ? 'group-hover:opacity-0' : ''
               }`}
             />
-            {product.images?.[1] && (
+            {variantImages[1] && (
               <img
                 src={secondaryImage}
                 alt={`${product.name} alternate view`}
@@ -93,9 +104,9 @@ export default function ProductCard({ product }) {
 
           {/* Badges */}
           <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
-            {product.discount > 0 && (
+            {discount > 0 && (
               <span className="bg-stone-900 text-amber-200 text-[10px] font-medium tracking-widest uppercase px-2.5 py-1 shadow-sm">
-                -{product.discount}%
+                -{discount}%
               </span>
             )}
             {product.isNewArrival && (
@@ -120,6 +131,7 @@ export default function ProductCard({ product }) {
           <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-stone-950/60 to-transparent transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out flex justify-center">
             <button
               onClick={handleAddToCart}
+              disabled={!defaultVariant?.isAvailable}
               className={`w-full py-2.5 px-4 text-xs font-medium tracking-widest uppercase transition-all duration-300 flex items-center justify-center gap-2 ${
                 isInCart
                   ? 'bg-stone-900 text-white hover:bg-amber-900'
@@ -127,7 +139,7 @@ export default function ProductCard({ product }) {
               }`}
             >
               <ShoppingBag className="w-3.5 h-3.5" />
-              <span>{isInCart ? `In Cart (${qtyInCart})` : 'Quick Add'}</span>
+              <span>{!defaultVariant?.isAvailable ? 'Unavailable' : isInCart ? `In Cart (${qtyInCart})` : 'Quick Add'}</span>
             </button>
           </div>
         </div>
@@ -164,24 +176,25 @@ export default function ProductCard({ product }) {
       <div className="px-4 pb-4 pt-1 flex items-center justify-between border-t border-stone-100 mt-2">
         <div className="flex items-baseline gap-2">
           <span className="text-base font-semibold text-stone-900">
-            ₹{product.price?.toLocaleString('en-IN')}
+            ₹{defaultVariant?.price?.toLocaleString('en-IN')}
           </span>
-          {product.originalPrice && product.originalPrice > product.price && (
+          {defaultVariant?.originalPrice && defaultVariant.originalPrice > defaultVariant.price && (
             <span className="text-xs text-stone-400 line-through font-light">
-              ₹{product.originalPrice?.toLocaleString('en-IN')}
+              ₹{defaultVariant.originalPrice?.toLocaleString('en-IN')}
             </span>
           )}
         </div>
 
         <button
           onClick={handleAddToCart}
+          disabled={!defaultVariant?.isAvailable}
           className={`text-xs font-semibold tracking-wider transition-colors uppercase border-b pb-0.5 ${
             isInCart 
               ? 'text-stone-900 border-stone-900'
               : 'text-amber-900 hover:text-stone-900 border-amber-900/40 hover:border-stone-900'
           }`}
         >
-          {isInCart ? `In Cart (${qtyInCart})` : '+ Add'}
+          {!defaultVariant?.isAvailable ? 'Unavailable' : isInCart ? `In Cart (${qtyInCart})` : '+ Add'}
         </button>
       </div>
     </div>
