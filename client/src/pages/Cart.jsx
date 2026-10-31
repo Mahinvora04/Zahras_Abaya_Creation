@@ -1,8 +1,10 @@
 import { ArrowRight, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
+import api from "../api/axios";
+import ProductCard from "../components/ProductCard";
 import useCartStore from "../store/cartStore";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function Cart() {
   const {
@@ -15,10 +17,26 @@ export default function Cart() {
     loading,
   } = useCartStore();
   const navigate = useNavigate();
+  const [productPool, setProductPool] = useState([]);
 
   useEffect(() => {
     fetchCart();
-  }, []);
+    api.get("/products", { params: { limit: 100 } })
+      .then(({ data }) => setProductPool(data.products || []))
+      .catch(() => setProductPool([]));
+  }, [fetchCart]);
+
+  const cartProductIds = new Set(items.map((item) => String(item.product_id)));
+  const cartCategories = new Set(
+    items.map((item) => item.product?.category).filter(Boolean).map(String),
+  );
+  const suggestions = productPool
+    .filter((product) =>
+      !cartProductIds.has(String(product._id)) &&
+      cartCategories.has(String(product.category)) &&
+      (product.variants?.find((variant) => variant.variant_id === product.defaultVariantId) || product.variants?.[0])?.isAvailable,
+    )
+    .slice(0, 6);
 
   const total = getTotal();
   const shippingFee = items.length > 0 ? 99 : 0;
@@ -197,6 +215,24 @@ export default function Cart() {
             </button>
           </div>
         </div>
+
+        {suggestions.length > 0 && (
+          <section className="mt-14" aria-labelledby="cart-suggestions-heading">
+            <div className="mb-6">
+              <span className="text-xs font-medium tracking-[0.25em] text-amber-800 uppercase">
+                Picked for your bag
+              </span>
+              <h2 id="cart-suggestions-heading" className="mt-1 text-2xl font-serif font-light text-stone-900">
+                You may also like
+              </h2>
+            </div>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+              {suggestions.map((product) => (
+                <ProductCard key={product._id} product={product} />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );
