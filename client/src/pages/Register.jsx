@@ -1,11 +1,12 @@
-import { AlertCircle, ArrowRight, Eye, EyeOff, Loader2, Lock, Mail, User } from 'lucide-react';
+import { AlertCircle, ArrowRight, Eye, EyeOff, Loader2, Lock, Mail, Phone, User } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 
+import GoogleSignInButton from '../components/GoogleSignInButton';
 import useAuthStore from '../store/authStore';
 
 export default function Register() {
-  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,7 +32,7 @@ export default function Register() {
     }
 
     setLoading(true);
-    const res = await register(form.name, form.email, form.password);
+    const res = await register(form.name, form.email, form.password, form.phone);
     setLoading(false);
     if (res?.success) navigate('/');
   };
@@ -80,7 +81,7 @@ export default function Register() {
             </div>
           </div>
 
-          {/* Email Address */}
+          {/* Email address */}
           <div>
             <label className="block text-xs font-medium tracking-wider uppercase text-stone-700 mb-1.5">
               Email Address
@@ -89,12 +90,31 @@ export default function Register() {
               <input
                 type="email"
                 required
+                autoComplete="username"
                 placeholder="name@example.com"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 className="w-full pl-10 pr-4 py-3 text-sm text-stone-900 bg-stone-50/50 border border-stone-200 rounded-sm focus:outline-none focus:border-stone-900 focus:bg-white transition"
               />
               <Mail className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            </div>
+          </div>
+
+          {/* Optional, unverified contact number */}
+          <div>
+            <label className="block text-xs font-medium tracking-wider uppercase text-stone-700 mb-1.5">
+              Phone Number <span className="normal-case tracking-normal text-stone-400">(optional, unverified)</span>
+            </label>
+            <div className="relative">
+              <input
+                type="tel"
+                autoComplete="tel"
+                placeholder="+91 98765 43210"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                className="w-full pl-10 pr-4 py-3 text-sm text-stone-900 bg-stone-50/50 border border-stone-200 rounded-sm focus:outline-none focus:border-stone-900 focus:bg-white transition"
+              />
+              <Phone className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             </div>
           </div>
 
@@ -160,6 +180,13 @@ export default function Register() {
             )}
           </button>
         </form>
+
+        <div className="mt-6 flex items-center gap-3 text-[10px] uppercase tracking-widest text-stone-400">
+          <span className="h-px flex-1 bg-stone-200" />
+          <span>Or continue with</span>
+          <span className="h-px flex-1 bg-stone-200" />
+        </div>
+        <GoogleSignInButton />
 
         {/* Footer Link */}
         <div className="mt-8 pt-6 border-t border-stone-100 text-center">
