@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, MapPin, Package, UserRound } from 'lucide-react';
+import { ArrowLeft, Download, MapPin, Package, UserRound } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import AdminSidebar from '../../components/AdminSidebar';
 import api from '../../api/axios';
+import createInvoicePdf from '../../utils/createInvoicePdf';
 
 const statuses = ['confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
 const payments = ['pending', 'paid', 'failed', 'refunded'];
@@ -52,6 +53,14 @@ export default function AdminOrderDetails() {
     }
   };
 
+  const downloadInvoice = () => {
+    try {
+      createInvoicePdf(order, customer);
+    } catch (downloadError) {
+      setError('Could not generate the invoice PDF. Please try again.');
+    }
+  };
+
   const address = order?.shipping_address || {};
   return (
     <div className="flex min-h-screen bg-stone-50 text-stone-900">
@@ -61,7 +70,7 @@ export default function AdminOrderDetails() {
         {error && <div role="alert" className="mb-5 border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div>}
         {notice && <div role="status" className="mb-5 border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</div>}
         {loading ? <p className="py-16 text-center text-sm text-stone-500">Loading order…</p> : order && <>
-          <header className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><p className="mb-2 text-[10px] uppercase tracking-[.25em] text-amber-800">Order details</p><h1 className="font-serif text-3xl">{order.order_number}</h1><p className="mt-2 text-sm text-stone-500">Placed {order.created_at ? new Date(order.created_at).toLocaleString() : 'date unavailable'}</p></div><p className="font-serif text-2xl">{money(order.total)}</p></header>
+          <header className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><p className="mb-2 text-[10px] uppercase tracking-[.25em] text-amber-800">Order details</p><h1 className="font-serif text-3xl">{order.order_number}</h1><p className="mt-2 text-sm text-stone-500">Placed {order.created_at ? new Date(order.created_at).toLocaleString() : 'date unavailable'}</p></div><div className="flex flex-wrap items-center gap-4"><button type="button" onClick={downloadInvoice} className="inline-flex items-center gap-2 border border-stone-300 bg-white px-4 py-3 text-xs font-medium uppercase tracking-wider text-stone-800 hover:border-amber-800 hover:text-amber-900"><Download size={15} />Download invoice PDF</button><p className="font-serif text-2xl">{money(order.total)}</p></div></header>
 
           <section className="mb-5 grid gap-5 lg:grid-cols-2">
             <article className="border border-stone-200 bg-white p-5 sm:p-6"><div className="mb-5 flex items-center gap-2"><UserRound size={17} className="text-amber-900" /><h2 className="font-serif text-xl">Customer</h2></div><dl className="space-y-3 text-sm"><div><dt className="text-xs uppercase tracking-wider text-stone-500">Name</dt><dd className="mt-1">{customer?._id ? <Link to={`/admin/customers/${customer._id}/orders`} className="font-medium text-amber-900 hover:underline">{customer.name || 'Customer'} · View order history</Link> : customer?.name || 'Customer'}</dd></div><div><dt className="text-xs uppercase tracking-wider text-stone-500">Email</dt><dd className="mt-1">{customer?.email || 'Not provided'}</dd></div><div><dt className="text-xs uppercase tracking-wider text-stone-500">Phone</dt><dd className="mt-1">{customer?.phone || order.phone || 'Not provided'}</dd></div><div><dt className="text-xs uppercase tracking-wider text-stone-500">Customer ID</dt><dd className="mt-1 break-all text-xs text-stone-500">{customer?._id || order.user_id}</dd></div></dl></article>
