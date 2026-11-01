@@ -22,6 +22,28 @@ app.use(cors({ origin: origins, credentials: true, methods: ['GET','POST','PUT',
 app.use(express.json({ limit: '2mb' }));
 app.use('/uploads', express.static(UPLOAD_DIR));
 
+// Process-local throttle for public authentication endpoints. In a multi-instance
+// deployment, use a shared store (for example Redis) so limits apply across workers.
+const authAttempts = new Map();
+const authThrottle = (req, res, next) => {
+  const now = Date.now();
+  const key = req.ip || req.socket.remoteAddress || 'unknown';
+  const windowMs = 15 * 60 * 1000;
+  let record = authAttempts.get(key);
+  if (!record || now >= record.resetAt) record = { count: 0, resetAt: now + windowMs };
+  record.count += 1;
+  authAttempts.set(key, record);
+  if (record.count > 20) {
+    res.set('Retry-After', String(Math.ceil((record.resetAt - now) / 1000)));
+    return err(res, 429, 'Too many authentication attempts. Try again later.');
+  }
+  next();
+};
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of authAttempts) if (now >= record.resetAt) authAttempts.delete(key);
+}, 15 * 60 * 1000).unref();
+
 let db;
 const oid = value => ObjectId.isValid(String(value || '')) ? new ObjectId(String(value)) : null;
 const json = value => {
@@ -74,14 +96,14 @@ const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:8*1024*1024
 function imageExt(file) { const b=file.buffer; if(b.subarray(0,3).equals(Buffer.from([0xff,0xd8,0xff])))return '.jpg'; if(b.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])))return '.png'; if(b.length>=12&&b.toString('ascii',0,4)==='RIFF'&&b.toString('ascii',8,12)==='WEBP')return '.webp'; const map={'image/jpeg':'.jpg','image/png':'.png','image/webp':'.webp'}; return map[file.mimetype]||null; }
 function saveFile(prefix,file) { const ext=imageExt(file); if(!ext)throw Object.assign(new Error('Use a JPG, PNG, or WebP image file'),{status:400}); let i=1,filename; do{filename=`${prefix}-${i++}${ext}`;}while(fs.existsSync(path.join(UPLOAD_DIR,filename))); fs.writeFileSync(path.join(UPLOAD_DIR,filename),file.buffer,{flag:'wx'}); return filename; }
 
-app.post('/api/auth/register', asyncRoute(async(req,res)=>{
+app.post('/api/auth/register', authThrottle, asyncRoute(async(req,res)=>{
   const {name,password}=req.body||{}; const email=String(req.body?.email||'').trim().toLowerCase(); if(!name||!email.includes('@')||!password)return err(res,422,'Invalid registration details'); if(password.length<6)return err(res,400,'Password must be 6+ chars');
   if(await db.collection('users').findOne({email:{$regex:`^${safeRegex(email)}$`,$options:'i'}}))return err(res,400,'An account with this email already exists');
   const phone=req.body.phone?.trim()?normalizePhone(req.body.phone):null; const doc={name,email,phone,phone_verified:false,password:await bcrypt.hash(password,10),role:'user'}; const result=await db.collection('users').insertOne(doc); cookie(res,tokenFor(result.insertedId)); res.status(201).json({success:true,user:{_id:String(result.insertedId),name,email,phone,phone_verified:false,role:'user'}});
 }));
-app.post('/api/auth/login',asyncRoute(async(req,res)=>{const email=String(req.body?.email||'').toLowerCase(),u=await db.collection('users').findOne({email:{$regex:`^${safeRegex(email)}$`,$options:'i'}});if(!u||!u.password||!await bcrypt.compare(req.body?.password||'',u.password))return err(res,401,'Invalid email or password');cookie(res,tokenFor(u._id));res.json({success:true,user:userJson(u)});}));
-app.post('/api/admin/login',asyncRoute(async(req,res)=>{const email=(process.env.ADMIN_EMAIL||'').trim().toLowerCase(),password=process.env.ADMIN_PASSWORD||'';if(!email||!password)return err(res,503,'Admin credentials are not configured on the server');if(String(req.body?.email).toLowerCase()!==email||req.body?.password!==password)return err(res,401,'Invalid admin email or password');let u=await db.collection('users').findOne({email});if(u&&u.role!=null&&u.role!=='admin')return err(res,409,'Admin email is already assigned to a customer account');if(!u){const r=await db.collection('users').insertOne({email,name:'Store Admin',role:'admin'});u=await db.collection('users').findOne({_id:r.insertedId});}else if(u.role!=='admin'){await db.collection('users').updateOne({_id:u._id},{$set:{role:'admin'}});u.role='admin';}cookie(res,tokenFor(u._id));res.json({success:true,user:userJson(u)});}));
-app.post('/api/auth/google',asyncRoute(async(req,res)=>{if(!process.env.GOOGLE_CLIENT_ID)return err(res,503,'Google sign-in is not configured');let claims;try{const ticket=await new OAuth2Client(process.env.GOOGLE_CLIENT_ID).verifyIdToken({idToken:req.body?.credential,audience:process.env.GOOGLE_CLIENT_ID});claims=ticket.getPayload();}catch{return err(res,401,'Invalid Google sign-in credential');}const sub=claims?.sub,email=String(claims?.email||'').trim().toLowerCase();if(!sub||!email||claims.email_verified!==true)return err(res,401,'Google did not provide a verified email address');let u=await db.collection('users').findOne({google_sub:sub});if(!u){u=await db.collection('users').findOne({email:{$regex:`^${safeRegex(email)}$`,$options:'i'}});if(u){if(u.google_sub&&u.google_sub!==sub)return err(res,409,'This account is linked to a different Google account');const r=await db.collection('users').updateOne({_id:u._id,google_sub:{$in:[null,sub]}},{$set:{google_sub:sub}});if(!r.matchedCount)return err(res,409,'This account is linked to a different Google account');u.google_sub=sub;}else{const doc={name:claims.name||email.split('@')[0],email,phone:null,phone_verified:false,google_sub:sub,role:'user'};const r=await db.collection('users').insertOne(doc);u={...doc,_id:r.insertedId};}}cookie(res,tokenFor(u._id));res.json({success:true,user:userJson(u)});}));
+app.post('/api/auth/login',authThrottle,asyncRoute(async(req,res)=>{const email=String(req.body?.email||'').toLowerCase(),u=await db.collection('users').findOne({email:{$regex:`^${safeRegex(email)}$`,$options:'i'}});if(!u||!u.password||!await bcrypt.compare(req.body?.password||'',u.password))return err(res,401,'Invalid email or password');cookie(res,tokenFor(u._id));res.json({success:true,user:userJson(u)});}));
+app.post('/api/admin/login',authThrottle,asyncRoute(async(req,res)=>{const email=(process.env.ADMIN_EMAIL||'').trim().toLowerCase(),password=process.env.ADMIN_PASSWORD||'';if(!email||!password)return err(res,503,'Admin credentials are not configured on the server');if(String(req.body?.email).toLowerCase()!==email||req.body?.password!==password)return err(res,401,'Invalid admin email or password');let u=await db.collection('users').findOne({email});if(u&&u.role!=null&&u.role!=='admin')return err(res,409,'Admin email is already assigned to a customer account');if(!u){const r=await db.collection('users').insertOne({email,name:'Store Admin',role:'admin'});u=await db.collection('users').findOne({_id:r.insertedId});}else if(u.role!=='admin'){await db.collection('users').updateOne({_id:u._id},{$set:{role:'admin'}});u.role='admin';}cookie(res,tokenFor(u._id));res.json({success:true,user:userJson(u)});}));
+app.post('/api/auth/google',authThrottle,asyncRoute(async(req,res)=>{if(!process.env.GOOGLE_CLIENT_ID)return err(res,503,'Google sign-in is not configured');let claims;try{const ticket=await new OAuth2Client(process.env.GOOGLE_CLIENT_ID).verifyIdToken({idToken:req.body?.credential,audience:process.env.GOOGLE_CLIENT_ID});claims=ticket.getPayload();}catch{return err(res,401,'Invalid Google sign-in credential');}const sub=claims?.sub,email=String(claims?.email||'').trim().toLowerCase();if(!sub||!email||claims.email_verified!==true)return err(res,401,'Google did not provide a verified email address');let u=await db.collection('users').findOne({google_sub:sub});if(!u){u=await db.collection('users').findOne({email:{$regex:`^${safeRegex(email)}$`,$options:'i'}});if(u){if(u.google_sub&&u.google_sub!==sub)return err(res,409,'This account is linked to a different Google account');const r=await db.collection('users').updateOne({_id:u._id,google_sub:{$in:[null,sub]}},{$set:{google_sub:sub}});if(!r.matchedCount)return err(res,409,'This account is linked to a different Google account');u.google_sub=sub;}else{const doc={name:claims.name||email.split('@')[0],email,phone:null,phone_verified:false,google_sub:sub,role:'user'};const r=await db.collection('users').insertOne(doc);u={...doc,_id:r.insertedId};}}cookie(res,tokenFor(u._id));res.json({success:true,user:userJson(u)});}));
 app.get('/api/auth/me',auth,(req,res)=>res.json({success:true,user:userJson(req.user)})); app.post('/api/auth/logout',(req,res)=>{res.clearCookie('token',{path:'/'});res.json({success:true,message:'Logged out'});});
 
 app.get('/api/products',asyncRoute(async(req,res)=>{
