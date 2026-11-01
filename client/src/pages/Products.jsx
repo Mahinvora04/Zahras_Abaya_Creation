@@ -28,6 +28,7 @@ export default function Products() {
   const colors = searchParams.get("colors") || "";
   const minPrice = searchParams.get("minPrice") || "";
   const maxPrice = searchParams.get("maxPrice") || "";
+  const featured = searchParams.get("featured") === "true";
   const page = parseInt(searchParams.get("page") || "1", 10);
 
   const [localSearch, setLocalSearch] = useState(search);
@@ -57,6 +58,7 @@ export default function Products() {
       colors: colors || undefined,
       minPrice: minPrice ? Number(minPrice) : undefined,
       maxPrice: maxPrice ? Number(maxPrice) : undefined,
+      featured: featured ? true : undefined,
       page: page || 1,
       limit: 20,
     };
@@ -68,7 +70,7 @@ export default function Products() {
     );
 
     fetchProducts(filteredParams);
-  }, [category, search, sort, sizes, colors, minPrice, maxPrice, page, fetchHomepageContent, fetchProducts]);
+  }, [category, search, sort, sizes, colors, minPrice, maxPrice, featured, page, fetchHomepageContent, fetchProducts]);
 
   // ✅ Helper: Updates URL and safely handles multiple params at once
   const updateFilters = (updates) => {
@@ -125,7 +127,7 @@ export default function Products() {
     } else if (key === "price") {
       setPriceRange({ min: "", max: "" });
       applyFilter({ minPrice: "", maxPrice: "" });
-    }
+    } else if (key === "featured") applyFilter({ featured: "" });
   };
 
   const clearAllFilters = () => {
@@ -152,6 +154,7 @@ export default function Products() {
   const activeFiltersCount =
     (category !== "All" ? 1 : 0) +
     (search ? 1 : 0) +
+    (featured ? 1 : 0) +
     selectedSizes.length +
     selectedColors.length +
     (priceRange.min || priceRange.max ? 1 : 0);
@@ -235,6 +238,10 @@ export default function Products() {
                       <span className="text-xs text-stone-700 group-hover:text-stone-900">{cat.name}</span>
                     </label>
                   ))}
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <input type="checkbox" checked={featured} onChange={(event) => applyFilter({ featured: event.target.checked ? "true" : "" })} className="w-4 h-4 text-stone-900 accent-stone-900 border-stone-300 rounded focus:ring-stone-900" />
+                    <span className="text-xs text-stone-700 group-hover:text-stone-900">Featured Products</span>
+                  </label>
                 </div>
               </div>
 
@@ -352,6 +359,12 @@ export default function Products() {
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50/80 border border-amber-200/80 text-amber-900 rounded-full text-[11px]">
                       Category: {category}
                       <button onClick={() => clearFilter("category")}><X className="w-3 h-3 hover:text-rose-700" /></button>
+                    </span>
+                  )}
+                  {featured && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50/80 border border-amber-200/80 text-amber-900 rounded-full text-[11px]">
+                      Featured products
+                      <button onClick={() => clearFilter("featured")}><X className="w-3 h-3 hover:text-rose-700" /></button>
                     </span>
                   )}
                   {search && (

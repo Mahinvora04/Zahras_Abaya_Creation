@@ -6,7 +6,7 @@ import AdminSidebar from '../../components/AdminSidebar';
 import useProductStore from '../../store/productStore';
 
 const commonSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'One Size'];
-const blankColor = () => ({ key: crypto.randomUUID(), color: '', colorHex: '#6b625d', sizes: [], price: '', originalPrice: '', description: '', images: [''], isAvailable: true });
+const blankColor = () => ({ key: crypto.randomUUID(), color: '', colorHex: '#6b625d', sizes: [], price: '', originalPrice: '', description: '', images: [], isAvailable: true });
 const skuPart = (value) => value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/&/g, ' and ').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toUpperCase();
 const variantSku = (name, color, size) => [name, color, size].map(skuPart).filter(Boolean).join('-');
 
@@ -29,6 +29,7 @@ export default function ProductForm() {
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploadingKey, setUploadingKey] = useState('');
+  const [deletingImage, setDeletingImage] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -54,7 +55,7 @@ export default function ProductForm() {
           const groups = new Map();
           (product.variants || []).forEach((variant) => {
             const name = variant.color || 'Default';
-            if (!groups.has(name)) groups.set(name, { ...blankColor(), color: name, colorHex: variant.colorHex || '#6b625d', sizes: [], price: variant.price ?? '', originalPrice: variant.originalPrice ?? '', description: variant.description || '', images: variant.images?.length ? variant.images : [''], isAvailable: variant.isAvailable !== false, existingVariants: {} });
+            if (!groups.has(name)) groups.set(name, { ...blankColor(), color: name, colorHex: variant.colorHex || '#6b625d', sizes: [], price: variant.price ?? '', originalPrice: variant.originalPrice ?? '', description: variant.description || '', images: variant.images || [], isAvailable: variant.isAvailable !== false, existingVariants: {} });
             const group = groups.get(name);
             if (variant.size && !group.sizes.includes(variant.size)) group.sizes.push(variant.size);
             group.existingVariants[variant.size || 'One Size'] = variant.variant_id;
@@ -120,13 +121,26 @@ export default function ProductForm() {
     files.forEach((file) => body.append('files', file));
     try {
       const { data } = await api.post('/admin/uploads/images', body, { headers: { 'Content-Type': undefined } });
-      const origin = new URL(api.defaults.baseURL, window.location.origin).origin;
-      updateColor(group.key, { images: [...group.images.filter(Boolean), ...data.images.map((path) => `${origin}${path}`)] });
+      updateColor(group.key, { images: [...group.images, ...data.images] });
       setMsg(`${data.images.length} image${data.images.length === 1 ? '' : 's'} uploaded. Save the product to apply them to this variant.`);
     } catch (error) {
       setMsg(error.response?.data?.detail || 'Image upload failed. Please try another image.');
     } finally {
       setUploadingKey('');
+    }
+  };
+
+  const removeImage = async (group, image, imageIndex) => {
+    const imageKey = `${group.key}:${imageIndex}`;
+    setDeletingImage(imageKey);
+    setMsg('');
+    try {
+      await api.delete('/admin/uploads/images', { data: { image_url: image } });
+      updateColor(group.key, { images: group.images.filter((_, index) => index !== imageIndex) });
+    } catch (error) {
+      setMsg(error.response?.data?.detail || 'Could not delete this image. Please try again.');
+    } finally {
+      setDeletingImage('');
     }
   };
 
@@ -190,7 +204,7 @@ export default function ProductForm() {
                 </div>
                 <div className="mt-4 border border-stone-100 bg-stone-50 p-3"><p className="mb-2 text-[10px] uppercase tracking-wider text-stone-500">Automatically generated SKUs</p><div className="flex flex-wrap gap-2">{group.sizes.length ? group.sizes.map((size) => <code key={size} className="bg-white px-2 py-1 text-[11px] text-stone-700">{variantSku(form.name, group.color, size)}</code>) : <span className="text-xs text-stone-400">Select sizes to preview SKUs</span>}</div></div>
                 <label className="mt-4 block text-xs uppercase tracking-wider text-stone-600">Description<textarea rows={3} value={group.description} onChange={(e) => updateColor(group.key, { description: e.target.value })} className="mt-2 w-full border border-stone-300 px-3 py-3 text-sm normal-case tracking-normal" /></label>
-                <div className="mt-5"><p className="mb-2 text-xs uppercase tracking-wider text-stone-600">Images for {group.color || 'this color'}</p>{group.images.map((image, imageIndex) => <div key={`${group.key}-${imageIndex}`} className="mb-2 flex gap-2"><input value={image} onChange={(e) => updateColor(group.key, { images: group.images.map((value, i) => i === imageIndex ? e.target.value : value) })} placeholder="Paste an image URL (optional)" className="min-w-0 flex-1 border border-stone-300 px-3 py-2 text-sm" />{group.images.length > 1 && <button type="button" aria-label="Remove image" onClick={() => updateColor(group.key, { images: group.images.filter((_, i) => i !== imageIndex) })} className="px-2 text-stone-500"><X size={16} /></button>}</div>)}<div className="mt-3 flex flex-wrap items-center gap-3"><button type="button" onClick={() => updateColor(group.key, { images: [...group.images, ''] })} className="text-xs text-amber-900 hover:underline">+ Add image URL</button><label className={`cursor-pointer border border-stone-300 px-3 py-2 text-xs uppercase tracking-wider hover:border-amber-800 ${uploadingKey === group.key ? 'pointer-events-none opacity-50' : ''}`}>{uploadingKey === group.key ? 'Uploading…' : 'Upload images'}<input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={Boolean(uploadingKey)} onChange={(e) => { uploadImages(group, [...e.target.files]); e.target.value = ''; }} className="sr-only" /></label><span className="text-[11px] text-stone-400">JPG, PNG or WebP · max 8 MB each</span></div>{group.images.filter(Boolean).length > 0 && <div className="mt-3 flex flex-wrap gap-2">{group.images.filter(Boolean).map((image, imageIndex) => <div key={`${image}-${imageIndex}`} className="relative"><img src={image} alt={`${group.color} product ${imageIndex + 1}`} className="h-20 w-16 border border-stone-200 bg-stone-100 object-cover" /><button type="button" aria-label="Remove image" onClick={() => updateColor(group.key, { images: group.images.filter((_, i) => i !== group.images.indexOf(image)) })} className="absolute -right-2 -top-2 rounded-full bg-stone-900 p-1 text-white"><X size={12} /></button></div>)}</div>}</div>
+                <div className="mt-5"><p className="mb-2 text-xs uppercase tracking-wider text-stone-600">Images for {group.color || 'this color'}</p><div className="flex flex-wrap items-center gap-3"><label className={`cursor-pointer border border-stone-300 px-3 py-2 text-xs uppercase tracking-wider hover:border-amber-800 ${uploadingKey === group.key ? 'pointer-events-none opacity-50' : ''}`}>{uploadingKey === group.key ? 'Uploading…' : 'Upload images'}<input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={Boolean(uploadingKey)} onChange={(e) => { uploadImages(group, [...e.target.files]); e.target.value = ''; }} className="sr-only" /></label><span className="text-[11px] text-stone-400">JPG, PNG or WebP · max 8 MB each</span></div>{group.images.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{group.images.map((image, imageIndex) => <div key={`${image}-${imageIndex}`} className="relative"><img src={image} alt={`${group.color} product ${imageIndex + 1}`} className="h-20 w-16 border border-stone-200 bg-stone-100 object-cover" /><button type="button" aria-label="Remove image" disabled={Boolean(deletingImage)} onClick={() => removeImage(group, image, imageIndex)} className="absolute -right-2 -top-2 rounded-full bg-stone-900 p-1 text-white disabled:opacity-50">{deletingImage === `${group.key}:${imageIndex}` ? <span className="block h-3 w-3 animate-pulse" /> : <X size={12} />}</button></div>)}</div>}</div>
                 <label className="mt-5 flex items-center gap-2 text-sm"><input type="checkbox" checked={group.isAvailable} onChange={(e) => updateColor(group.key, { isAvailable: e.target.checked })} />Available to order in selected sizes</label>
                 <p className="mt-4 text-xs text-stone-500">This color will create {group.sizes.length} variant{group.sizes.length === 1 ? '' : 's'}: {group.sizes.length ? group.sizes.join(', ') : 'select at least one size'}.</p>
               </article>

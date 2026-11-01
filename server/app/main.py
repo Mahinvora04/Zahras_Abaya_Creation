@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from google.auth.exceptions import GoogleAuthError
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2 import id_token as google_id_token
-from fastapi import FastAPI, HTTPException, Depends, Request, Response, status, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Depends, Request, Response, status, UploadFile, File, Form, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -20,6 +20,7 @@ from typing import List, Optional
 from bson import ObjectId  # Added for ObjectId handling
 from uuid import uuid4
 from starlette.concurrency import run_in_threadpool
+from urllib.parse import urlsplit
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +165,25 @@ def slugify_product_name(value: str) -> str:
     normalized = normalized.replace("&", " and ")
     return re.sub(r"[^a-z0-9]+", "-", normalized).strip("-")
 
+def delete_uploaded_image_file(image_url: Optional[str]) -> bool:
+    image_path = urlsplit(image_url or "").path
+    if not image_path.startswith("/uploads/"):
+        return False
+
+    filename = image_path.removeprefix("/uploads/")
+    if not filename or Path(filename).name != filename:
+        return False
+
+    target = UPLOAD_DIR / filename
+    try:
+        target.resolve().relative_to(UPLOAD_DIR.resolve())
+    except ValueError:
+        return False
+    if target.exists() and target.is_file():
+        target.unlink()
+        return True
+    return False
+
 def build_variant_sku(product_name: str, color: Optional[str], size: Optional[str]) -> str:
     """Create a consistent SKU from product, color, and size names."""
     parts = [slugify_product_name(str(value)).upper() for value in (product_name, color, size) if value]
@@ -256,6 +276,9 @@ class SlideReq(BaseModel):
     link: str = "/products"
     cta: str = "Shop Now"
     order: int = 0
+
+class SlideOrderReq(BaseModel):
+    order: int = Field(ge=1)
 
 class ProfileUpdateReq(BaseModel):
     name: Optional[str] = None
@@ -525,10 +548,13 @@ async def get_products(
     colors: Optional[str] = None,
     minPrice: Optional[float] = None,
     maxPrice: Optional[float] = None,
+    featured: Optional[bool] = None,
     page: int = 1,       # ✅ Added
     limit: int = 20      # ✅ Added (20 per page)
 ):
     base_query = {"isActive": {"$ne": False}}
+    if featured is True:
+        base_query["featured"] = True
     
     # 1. Build base query (Category & Search)
     if category and category != "All":
@@ -537,10 +563,7 @@ async def get_products(
             category_values = [category_doc["_id"], category_doc.get("name"), category_doc.get("query")]
             base_query["category"] = {"$in": [value for value in category_values if value is not None]}
         else:
-            return {
-                "success": True, "products": [], "totalCount": 0, "totalPages": 1, "currentPage": 1,
-                "availableFilters": {"minPrice": 0, "maxPrice": 10000, "sizes": [], "colors": []}
-            }
+            base_query["category"] = {"$regex": f"^{re.escape(category)}$", "$options": "i"}
     
     if search and search.strip():
         base_query["name"] = {"$regex": search, "$options": "i"}
@@ -729,13 +752,44 @@ async def update_admin_slide(slide_id: str, req: SlideReq, admin: dict = Depends
         object_id = ObjectId(slide_id)
     except Exception:
         raise HTTPException(status_code=404, detail="Banner not found")
+    existing = await db.slides.find_one({"_id": object_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Banner not found")
     slide_doc = req.model_dump()
     slide_doc.update({key: value.strip() for key, value in slide_doc.items() if isinstance(value, str)})
     result = await db.slides.update_one({"_id": object_id}, {"$set": slide_doc})
     if not result.matched_count:
         raise HTTPException(status_code=404, detail="Banner not found")
+    if existing.get("image") != slide_doc.get("image"):
+        delete_uploaded_image_file(existing.get("image"))
     slide = await db.slides.find_one({"_id": object_id})
     return {"success": True, "slide": serialize_doc(slide)}
+
+@app.put("/api/admin/slides/{slide_id}/order")
+async def swap_admin_slide_order(slide_id: str, req: SlideOrderReq, admin: dict = Depends(get_admin_user)):
+    try:
+        object_id = ObjectId(slide_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Banner not found")
+
+    slides = await db.slides.find().sort([("order", 1), ("_id", 1)]).to_list(length=100)
+    current_index = next((index for index, slide in enumerate(slides) if slide["_id"] == object_id), None)
+    target_index = req.order - 1
+    if current_index is None:
+        raise HTTPException(status_code=404, detail="Banner not found")
+    if target_index >= len(slides):
+        raise HTTPException(status_code=400, detail="Choose an order within the current banner count")
+
+    if current_index != target_index:
+        current_slide = slides[current_index]
+        target_slide = slides[target_index]
+        current_order = current_slide.get("order", current_index)
+        target_order = target_slide.get("order", target_index)
+        await db.slides.update_one({"_id": current_slide["_id"]}, {"$set": {"order": target_order}})
+        await db.slides.update_one({"_id": target_slide["_id"]}, {"$set": {"order": current_order}})
+
+    updated_slides = await db.slides.find().sort([("order", 1), ("_id", 1)]).to_list(length=100)
+    return {"success": True, "slides": [serialize_doc(slide) for slide in updated_slides]}
 
 @app.delete("/api/admin/slides/{slide_id}")
 async def delete_admin_slide(slide_id: str, admin: dict = Depends(get_admin_user)):
@@ -743,13 +797,18 @@ async def delete_admin_slide(slide_id: str, admin: dict = Depends(get_admin_user
         object_id = ObjectId(slide_id)
     except Exception:
         raise HTTPException(status_code=404, detail="Banner not found")
+    slide = await db.slides.find_one({"_id": object_id})
+    if not slide:
+        raise HTTPException(status_code=404, detail="Banner not found")
     result = await db.slides.delete_one({"_id": object_id})
     if not result.deleted_count:
         raise HTTPException(status_code=404, detail="Banner not found")
+    delete_uploaded_image_file(slide.get("image"))
     return {"success": True, "message": "Banner deleted"}
 
 @app.post("/api/admin/uploads/images")
 async def upload_product_images(
+    request: Request,
     product_name: str = Form(...),
     color: str = Form(...),
     files: List[UploadFile] = File(...),
@@ -784,11 +843,19 @@ async def upload_product_images(
                 break
             except FileExistsError:
                 number += 1
-        saved_urls.append(f"/uploads/{filename}")
+        saved_urls.append(str(request.base_url).rstrip("/") + f"/uploads/{filename}")
     return {"success": True, "images": saved_urls}
+
+@app.delete("/api/admin/uploads/images")
+async def delete_product_image(
+    image_url: str = Body(..., embed=True),
+    admin: dict = Depends(get_admin_user),
+):
+    return {"success": True, "deleted": delete_uploaded_image_file(image_url)}
 
 @app.post("/api/admin/uploads/banners")
 async def upload_banner_image(
+    request: Request,
     title: str = Form(...),
     file: UploadFile = File(...),
     admin: dict = Depends(get_admin_user),
@@ -815,7 +882,7 @@ async def upload_banner_image(
             break
         except FileExistsError:
             number += 1
-    return {"success": True, "image": f"/uploads/{filename}"}
+    return {"success": True, "image": str(request.base_url).rstrip("/") + f"/uploads/{filename}"}
 
 @app.post("/api/admin/uploads/categories")
 async def upload_category_image(

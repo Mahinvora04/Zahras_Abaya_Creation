@@ -4,6 +4,30 @@ import AdminSidebar from '../../components/AdminSidebar';
 import api from '../../api/axios';
 
 const emptyBanner = (order = 0) => ({ title: '', image: '', tagline: '', subtitle: '', link: '/products', cta: 'Shop Now', order });
+const categoryDestinations = [
+  { label: 'All Products', value: '' },
+  { label: 'Embroidered Abaya', value: 'Embroidered Abaya' },
+  { label: 'Daily Wear Abaya', value: 'Daily Wear Abaya' },
+  { label: 'Coat', value: 'Coat' },
+  { label: 'Hijab', value: 'Hijab' },
+];
+const priceDestinations = [
+  { label: 'Any price', min: '', max: '' },
+  { label: 'Under ₹1,000', min: '', max: '1000' },
+  { label: '₹1,000–₹2,500', min: '1000', max: '2500' },
+  { label: '₹2,500–₹5,000', min: '2500', max: '5000' },
+  { label: '₹5,000 and above', min: '5000', max: '' },
+];
+const buildProductLink = (category, priceRange, sort, featured) => {
+  const params = new URLSearchParams();
+  if (category) params.set('category', category);
+  if (priceRange.min) params.set('minPrice', priceRange.min);
+  if (priceRange.max) params.set('maxPrice', priceRange.max);
+  if (sort) params.set('sort', sort);
+  if (featured) params.set('featured', 'true');
+  const query = params.toString();
+  return query ? `/products?${query}` : '/products';
+};
 
 export default function AdminBanners() {
   const [slides, setSlides] = useState([]);
@@ -47,8 +71,7 @@ export default function AdminBanners() {
     body.append('file', file);
     try {
       const { data } = await api.post('/admin/uploads/banners', body, { headers: { 'Content-Type': undefined } });
-      const origin = new URL(api.defaults.baseURL, window.location.origin).origin;
-      updateBanner(id, { image: `${origin}${data.image}` });
+      updateBanner(id, { image: data.image });
     } catch (requestError) {
       setError(requestError.response?.data?.detail || 'Could not upload banner image.');
     } finally {
@@ -102,7 +125,38 @@ export default function AdminBanners() {
     }
   };
 
-  const renderBannerEditor = (banner, id, onCancel) => (
+  const changeBannerOrder = async (banner, order) => {
+    setSavingId(banner._id);
+    setError('');
+    setNotice('');
+    try {
+      const { data } = await api.put(`/admin/slides/${banner._id}/order`, { order: Number(order) });
+      const orderById = new Map((data.slides || []).map((item) => [item._id, item.order]));
+      setSlides((items) => items.map((item) => ({ ...item, order: orderById.get(item._id) ?? item.order })).sort((a, b) => a.order - b.order));
+      setNotice('Banner display order updated.');
+    } catch (requestError) {
+      setError(requestError.response?.data?.detail || 'Could not update banner order.');
+    } finally {
+      setSavingId('');
+    }
+  };
+
+  const renderBannerEditor = (banner, id, onCancel) => {
+    const params = new URLSearchParams((banner.link || '').split('?')[1] || '');
+    const selectedCategory = params.get('category') || '';
+    const selectedPriceRange = priceDestinations.find((range) =>
+      range.min === (params.get('minPrice') || '') && range.max === (params.get('maxPrice') || ''),
+    ) || priceDestinations[0];
+    const selectedSort = params.get('sort') || '';
+    const selectedFeatured = params.get('featured') === 'true';
+    const updateDestination = (category, priceRange, sort = selectedSort, featured = selectedFeatured) => updateBanner(id, { link: buildProductLink(category, priceRange, sort, featured) });
+    const selectedProductFilter = selectedFeatured ? 'featured' : selectedSort === 'newest' ? 'newest' : selectedCategory;
+    const changeProductFilter = (value) => {
+      const category = categoryDestinations.some((destination) => destination.value === value) ? value : '';
+      updateBanner(id, { link: buildProductLink(category, selectedPriceRange, value === 'newest' ? 'newest' : '', value === 'featured') });
+    };
+
+    return (
     <article className="border border-stone-200 bg-white p-5 sm:p-6">
       <div className="mb-5 flex items-center justify-between"><div className="flex items-center gap-2"><Image size={17} className="text-amber-900" /><h2 className="font-serif text-xl">{id === 'new' ? 'New storefront banner' : `Banner ${Number(banner.order) + 1}`}</h2></div>{onCancel && <button type="button" onClick={onCancel} className="text-xs text-stone-500 hover:text-stone-900">Cancel</button>}</div>
       <div className="grid gap-5 lg:grid-cols-[220px_1fr]">
@@ -112,14 +166,15 @@ export default function AdminBanners() {
           <label className="text-xs uppercase tracking-wider text-stone-500">Tagline<input value={banner.tagline || ''} onChange={(event) => updateBanner(id, { tagline: event.target.value })} className="mt-2 w-full border border-stone-300 px-3 py-2.5 text-sm normal-case tracking-normal text-stone-900" /></label>
           <label className="text-xs uppercase tracking-wider text-stone-500 sm:col-span-2">Subtitle<textarea rows={3} value={banner.subtitle || ''} onChange={(event) => updateBanner(id, { subtitle: event.target.value })} className="mt-2 w-full border border-stone-300 px-3 py-2.5 text-sm normal-case tracking-normal text-stone-900" /></label>
           <label className="text-xs uppercase tracking-wider text-stone-500">Button label<input value={banner.cta || ''} onChange={(event) => updateBanner(id, { cta: event.target.value })} className="mt-2 w-full border border-stone-300 px-3 py-2.5 text-sm normal-case tracking-normal text-stone-900" /></label>
-          <label className="text-xs uppercase tracking-wider text-stone-500">Button link<input value={banner.link || ''} onChange={(event) => updateBanner(id, { link: event.target.value })} placeholder="/products" className="mt-2 w-full border border-stone-300 px-3 py-2.5 text-sm normal-case tracking-normal text-stone-900" /></label>
-          <label className="text-xs uppercase tracking-wider text-stone-500">Display order<input type="number" min="0" value={banner.order ?? 0} onChange={(event) => updateBanner(id, { order: event.target.value })} className="mt-2 w-full border border-stone-300 px-3 py-2.5 text-sm normal-case tracking-normal text-stone-900" /></label>
-          <label className="text-xs uppercase tracking-wider text-stone-500 sm:col-span-2">Image URL<input value={banner.image || ''} onChange={(event) => updateBanner(id, { image: event.target.value })} placeholder="Upload an image or paste a URL" className="mt-2 w-full border border-stone-300 px-3 py-2.5 text-sm normal-case tracking-normal text-stone-900" /></label>
+          <label className="text-xs uppercase tracking-wider text-stone-500">Product filter<select value={selectedProductFilter} onChange={(event) => changeProductFilter(event.target.value)} className="mt-2 w-full border border-stone-300 bg-white px-3 py-2.5 text-sm normal-case tracking-normal text-stone-900">{categoryDestinations.map((destination) => <option key={destination.label} value={destination.value}>{destination.label}</option>)}<option value="newest">Newest Arrivals</option><option value="featured">Featured Products</option></select></label>
+          <label className="text-xs uppercase tracking-wider text-stone-500">Price range<select value={priceDestinations.indexOf(selectedPriceRange)} onChange={(event) => updateDestination(selectedCategory, priceDestinations[Number(event.target.value)])} className="mt-2 w-full border border-stone-300 bg-white px-3 py-2.5 text-sm normal-case tracking-normal text-stone-900">{priceDestinations.map((range, index) => <option key={range.label} value={index}>{range.label}</option>)}</select></label>
+          {id !== 'new' && <label className="text-xs uppercase tracking-wider text-stone-500">Display order<select disabled={Boolean(savingId)} value={Math.max(1, slides.findIndex((item) => item._id === id) + 1)} onChange={(event) => changeBannerOrder(banner, event.target.value)} className="mt-2 w-full border border-stone-300 bg-white px-3 py-2.5 text-sm normal-case tracking-normal text-stone-900 disabled:opacity-50">{slides.map((_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label>}
           <div className="sm:col-span-2"><button type="button" disabled={savingId === id || uploadingId === id} onClick={() => saveBanner(banner, id)} className="bg-stone-900 px-4 py-3 text-xs uppercase tracking-wider text-white hover:bg-amber-900 disabled:opacity-50"><Save size={14} className="mr-2 inline" />{savingId === id ? 'Saving…' : 'Save banner'}</button>{id !== 'new' && <button type="button" disabled={savingId === id} onClick={() => deleteBanner(banner)} className="ml-3 border border-rose-200 px-4 py-3 text-xs uppercase tracking-wider text-rose-700 disabled:opacity-50"><Trash2 size={14} className="mr-2 inline" />Delete</button>}</div>
         </div>
       </div>
     </article>
-  );
+    );
+  };
 
   return (
     <div className="flex min-h-screen bg-stone-50 text-stone-900"><AdminSidebar /><main className="min-w-0 flex-1 p-5 sm:p-8 lg:p-10">
