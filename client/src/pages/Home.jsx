@@ -40,11 +40,6 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [slides.length]);
 
-  // Simplified helper: matches product.category (which is the category _id) to cat._id
-  const getCategoryCount = (categoryId) => {
-    return products.filter((product) => product.category === categoryId).length;
-  };
-
   if (contentLoading) {
     return (
       <div className="flex justify-center items-center h-screen bg-stone-50">
@@ -160,8 +155,7 @@ export default function Home() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {categories.slice(0, 8).map((cat) => {
-            // Calculate count by matching product.category (ID) to cat._id
-            const count = getCategoryCount(cat._id);
+            const count = Number(cat.productCount) || 0;
             
             return (
               <Link

@@ -110,6 +110,8 @@ export default function OrderDetails() {
             <span className="text-xs font-medium tracking-[0.25em] text-amber-800 uppercase">Order details</span>
             <h1 className="mt-2 font-serif text-3xl font-light text-stone-900">{order.order_number}</h1>
             <p className="mt-2 text-sm text-stone-500">Placed {formatDate(order.created_at)}</p>
+            <p className="mt-2 text-xs text-stone-500">Payment method: {order.payment_method === "upi" ? "UPI" : order.payment_method === "on_delivery" ? "Cash/UPI on delivery" : "Not specified"}</p>
+            {order.payment_method === "upi" && order.status === "pending_payment" && <Link to={`/orders/${id}/pay-upi`} className="mt-3 inline-block text-xs font-medium uppercase tracking-wider text-amber-900 underline">Continue UPI payment</Link>}
           </div>
           <div className="space-y-1 sm:text-right">
             <span className="inline-block bg-amber-50 px-3 py-1.5 text-xs uppercase tracking-wider text-amber-900">
@@ -230,7 +232,7 @@ export default function OrderDetails() {
                 <div className="flex justify-between border-t border-stone-100 pt-3 font-semibold text-stone-900"><dt>Total</dt><dd>{formatPrice(order.total)}</dd></div>
               </dl>
             </div>
-            <p className="text-xs leading-5 text-stone-500">Payment status: {String(order.payment_status || "pending").replaceAll("_", " ")}. Payment processing is not connected yet.</p>
+            <p className="text-xs leading-5 text-stone-500">Payment status: {String(order.payment_status || "pending").replaceAll("_", " ")}. The store will verify receipt and update the payment status.</p>
           </aside>
         </div>
       </div>

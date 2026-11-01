@@ -20,6 +20,7 @@ import ProductForm from "./pages/admin/ProductForm";
 import Products from "./pages/Products";
 import OrderDetails from "./pages/OrderDetails";
 import OrderHistory from "./pages/OrderHistory";
+import UpiPayment from "./pages/UpiPayment";
 import Profile from "./pages/Profile";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Register from "./pages/Register";
@@ -128,6 +129,14 @@ export default function App() {
                   element={
                     <ProtectedRoute>
                       <OrderHistory />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/orders/:id/pay-upi"
+                  element={
+                    <ProtectedRoute>
+                      <UpiPayment />
                     </ProtectedRoute>
                   }
                 />

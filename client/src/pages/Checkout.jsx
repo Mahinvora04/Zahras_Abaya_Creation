@@ -1,10 +1,12 @@
 import {
   ArrowLeft,
   ArrowRight,
+  Banknote,
   CheckCircle2,
   MapPin,
   Package,
   Plus,
+  QrCode,
   ShieldCheck,
   Truck,
   User,
@@ -47,6 +49,7 @@ export default function Checkout() {
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [newAddress, setNewAddress] = useState(EMPTY_ADDRESS);
   const [saving, setSaving] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("on_delivery");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -112,9 +115,14 @@ export default function Checkout() {
 
     setSaving(true);
     try {
-      const { data } = await api.post("/orders", { address_id: selectedAddressId });
+      const { data } = await api.post("/orders", {
+        address_id: selectedAddressId,
+        payment_method: paymentMethod,
+      });
       await useCartStore.getState().fetchCart();
-      navigate(`/orders/${data.order._id}`);
+      navigate(paymentMethod === "upi"
+        ? `/orders/${data.order._id}/pay-upi`
+        : `/orders/${data.order._id}`);
     } catch (requestError) {
       setError(requestError.response?.data?.detail || "Could not place this order. Please try again.");
     } finally {
@@ -409,6 +417,24 @@ export default function Checkout() {
               )}
             </section>
 
+            {/* Payment method */}
+            <section className="bg-white border border-stone-200 rounded-sm p-6 sm:p-8">
+              <div className="flex items-center gap-3 border-b border-stone-100 pb-4 mb-5">
+                <QrCode className="w-5 h-5 text-amber-800" />
+                <h2 className="font-serif text-xl text-stone-900">Payment method</h2>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className={`flex cursor-pointer gap-3 border rounded-sm p-4 ${paymentMethod === "on_delivery" ? "border-amber-800 bg-amber-50/40 ring-1 ring-amber-800" : "border-stone-200 hover:border-stone-400"}`}>
+                  <input type="radio" name="paymentMethod" value="on_delivery" checked={paymentMethod === "on_delivery"} onChange={() => setPaymentMethod("on_delivery")} className="mt-1 accent-amber-800" />
+                  <span><span className="flex items-center gap-2 text-sm font-medium text-stone-900"><Banknote className="h-4 w-4 text-amber-800" />Cash/UPI on delivery</span><span className="mt-1 block text-xs text-stone-500">Pay the delivery agent when your order arrives.</span></span>
+                </label>
+                <label className={`flex cursor-pointer gap-3 border rounded-sm p-4 ${paymentMethod === "upi" ? "border-amber-800 bg-amber-50/40 ring-1 ring-amber-800" : "border-stone-200 hover:border-stone-400"}`}>
+                  <input type="radio" name="paymentMethod" value="upi" checked={paymentMethod === "upi"} onChange={() => setPaymentMethod("upi")} className="mt-1 accent-amber-800" />
+                  <span><span className="flex items-center gap-2 text-sm font-medium text-stone-900"><QrCode className="h-4 w-4 text-amber-800" />Pay now with UPI</span><span className="mt-1 block text-xs text-stone-500">Scan a QR code for the order total.</span></span>
+                </label>
+              </div>
+            </section>
+
             {/* Items being purchased */}
             <section className="bg-white border border-stone-200 rounded-sm p-6 sm:p-8">
               <div className="flex items-center gap-3 border-b border-stone-100 pb-4 mb-5">
@@ -513,11 +539,11 @@ export default function Checkout() {
               disabled={saving || !selectedAddress}
               className="w-full bg-stone-900 text-stone-100 hover:bg-amber-900 py-3.5 px-4 text-xs font-medium tracking-widest uppercase transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              {saving ? "Placing order..." : "Place order"}
+              {saving ? "Placing order..." : paymentMethod === "upi" ? "Continue to UPI payment" : "Place order"}
               <ArrowRight className="w-4 h-4" />
             </button>
             <p className="text-[10px] leading-relaxed text-stone-400 text-center">
-              Payment is not connected yet. New orders will be saved as pending payment.
+              Payment status stays pending until the store verifies it.
             </p>
             <Link
               to="/cart"
