@@ -54,7 +54,7 @@ export default function Footer() {
           <ul className="space-y-3">
             {[
               { label: "Home", path: "/" },
-              { label: "Shop All", path: "/products" },
+              { label: "All Collection", path: "/products" },
               { label: "Abaya Collection", path: "/products?category=Abaya" },
               { label: "Hijabs & Scarves", path: "/products?category=Hijab" },
               { label: "Kaftans", path: "/products?category=Kaftan" },

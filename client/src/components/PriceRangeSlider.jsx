@@ -53,7 +53,7 @@ export default function PriceRangeSlider({
         {(localMin > min || localMax < max) && (
           <button
             onClick={onReset}
-            className="text-xs text-blue-600 hover:text-blue-800 underline"
+            className="text-xs text-amber-900 hover:text-amber-950 underline underline-offset-2 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-900"
           >
             Reset price range
           </button>

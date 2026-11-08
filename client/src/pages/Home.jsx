@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import ProductCard from "../components/ProductCard";
-import banner from "../assets/home/banner.jpeg";
+import mediaUrl from "../utils/mediaUrl";
 import useContentStore from "../store/contentStore";
 import useProductStore from "../store/productStore";
 
@@ -62,14 +62,17 @@ export default function Home() {
             }`}
           >
             <div className="relative w-full h-full overflow-hidden">
-              <img
-                src={slide.image}
-                alt={slide.title}
-                className={`w-full h-full object-cover object-top transition-transform duration-7000 ease-out ${
-                  slides.indexOf(slide) === currentSlide ? "scale-105" : "scale-100"
-                }`}
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/40 to-transparent" />
+              <picture className="block h-full w-full">
+                {slide.mobile_image && <source media="(max-width: 767px)" srcSet={mediaUrl(slide.mobile_image)} />}
+                <img
+                  src={mediaUrl(slide.image)}
+                  alt={slide.title}
+                  className={`w-full h-full object-cover object-top transition-transform duration-7000 ease-out ${
+                    slides.indexOf(slide) === currentSlide ? "scale-105" : "scale-100"
+                  }`}
+                />
+              </picture>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent md:bg-gradient-to-r md:from-black/75 md:via-black/40 md:to-transparent" />
             </div>
 
             <div className="absolute inset-0 flex items-center">
@@ -164,7 +167,7 @@ export default function Home() {
                 className="group relative h-96 rounded-sm overflow-hidden bg-stone-100 shadow-sm"
               >
                 <img
-                  src={cat.image}
+                  src={mediaUrl(cat.image)}
                   alt={cat.name}
                   className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out"
                 />
@@ -248,7 +251,7 @@ export default function Home() {
 
           <div className="relative h-[350px] sm:h-[450px] md:h-full max-h-[550px] w-full overflow-hidden">
             <img
-              src={banner}
+              src={mediaUrl("/uploads/home/banner.jpeg")}
               alt="Luxury Abaya Craftsmanship"
               className="w-full h-full object-cover object-top"
             />

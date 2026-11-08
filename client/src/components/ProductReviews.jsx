@@ -1,5 +1,6 @@
 import { CheckCircle2, Star } from "lucide-react";
 import { useMemo, useState } from "react";
+import ThemedSelect from "./ThemedSelect";
 
 function getReviews(product) {
   const now = new Date();
@@ -78,29 +79,36 @@ export default function ProductReviews({ product }) {
       <div className="mb-6 grid gap-3 rounded-sm border border-stone-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-xs font-medium text-stone-600">
           Filter by rating
-          <select
+          <ThemedSelect
+            id="review-rating-filter"
             value={ratingFilter}
-            onChange={(event) => { setRatingFilter(event.target.value); setPage(1); }}
-            className="mt-1.5 block w-full border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900"
-          >
-            <option value="all">All ratings ({reviews.length})</option>
-            {[5, 4, 3, 2, 1].map((rating) => (
-              <option key={rating} value={rating}>{rating} stars ({ratingCounts[rating]})</option>
-            ))}
-          </select>
+            onChange={(value) => { setRatingFilter(value); setPage(1); }}
+            ariaLabel="Filter reviews by rating"
+            className="mt-1.5 block w-full text-sm"
+            options={[
+              { value: "all", label: `All ratings (${reviews.length})` },
+              ...[5, 4, 3, 2, 1].map((rating) => ({
+                value: String(rating),
+                label: `${rating} stars (${ratingCounts[rating]})`,
+              })),
+            ]}
+          />
         </label>
 
         <label className="text-xs font-medium text-stone-600">
           Sort reviews
-          <select
+          <ThemedSelect
+            id="review-sort"
             value={sortBy}
-            onChange={(event) => { setSortBy(event.target.value); setPage(1); }}
-            className="mt-1.5 block w-full border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900"
-          >
-            <option value="newest">Newest first</option>
-            <option value="highest">Highest rated</option>
-            <option value="lowest">Lowest rated</option>
-          </select>
+            onChange={(value) => { setSortBy(value); setPage(1); }}
+            ariaLabel="Sort reviews"
+            className="mt-1.5 block w-full text-sm"
+            options={[
+              { value: "newest", label: "Newest first" },
+              { value: "highest", label: "Highest rated" },
+              { value: "lowest", label: "Lowest rated" },
+            ]}
+          />
         </label>
 
         <label className="flex items-center gap-2 self-end pb-2 text-sm text-stone-600 sm:col-span-2 lg:col-span-2">
@@ -149,15 +157,15 @@ export default function ProductReviews({ product }) {
         <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <label className="text-xs text-stone-600">
             Reviews per page
-            <select
-              value={pageSize}
-              onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}
-              className="ml-2 border border-stone-200 bg-white px-2 py-1.5 text-sm text-stone-900"
-            >
-              {[5, 10, 20].map((size) => (
-                <option key={size} value={size}>{size}</option>
-              ))}
-            </select>
+            <ThemedSelect
+              id="review-page-size"
+              value={String(pageSize)}
+              onChange={(value) => { setPageSize(Number(value)); setPage(1); }}
+              ariaLabel="Reviews per page"
+              className="text-sm"
+              containerClassName="ml-2 inline-block align-middle"
+              options={[5, 10, 20].map((size) => ({ value: String(size), label: String(size) }))}
+            />
           </label>
 
           <div className="flex items-center gap-3">

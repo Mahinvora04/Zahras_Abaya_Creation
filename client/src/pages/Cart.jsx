@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import ProductCard from "../components/ProductCard";
 import useCartStore from "../store/cartStore";
+import mediaUrl from "../utils/mediaUrl";
 import { getProductSlug } from "../utils/productSlug";
 import { useEffect, useState } from "react";
 
@@ -92,7 +93,7 @@ export default function Cart() {
             {items.map((item) => {
               // ✅ Safely access product data
               const product = item.product || {};
-              const imageSrc = item.selectedVariant?.images?.[0] || "/images/placeholder.jpg";
+              const imageSrc = item.selectedVariant?.images?.[0] || "";
               const price = item.selectedVariant?.price ?? 0;
               const quantity = item.quantity || 1;
               const productSlug = getProductSlug(product);
@@ -107,11 +108,11 @@ export default function Cart() {
                     to={`/product/${productSlug}`}
                     className="w-24 h-28 bg-stone-100 rounded-sm overflow-hidden shrink-0 block"
                   >
-                    <img
-                      src={imageSrc}
+                    {imageSrc && <img
+                      src={mediaUrl(imageSrc)}
                       alt={product.name || "Product"}
                       className="w-full h-full object-cover object-top"
-                    />
+                    />}
                   </Link>
 
                   {/* Info */}

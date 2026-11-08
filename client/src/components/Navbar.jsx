@@ -66,7 +66,7 @@ export default function Navbar() {
                 to="/products"
                 className="text-xs font-medium uppercase tracking-widest text-stone-300 hover:text-amber-300 transition-colors"
               >
-                Shop All
+                All Collection
               </Link>
               <Link
                 to="/products?category=Abaya"
@@ -224,7 +224,7 @@ export default function Navbar() {
               onClick={() => setMobileMenuOpen(false)}
               className="text-sm font-medium uppercase tracking-wider text-stone-200 hover:text-amber-300"
             >
-              Shop All Products
+              All Products
             </Link>
             <Link
               to="/products?category=Abaya"

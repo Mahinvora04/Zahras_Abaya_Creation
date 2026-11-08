@@ -50,9 +50,9 @@ export default function AdminOrders() {
   const openOrder = (orderId) => navigate(`/admin/orders/${orderId}`);
 
   return (
-    <div className="flex min-h-screen bg-stone-50 text-stone-900">
+    <div className="flex min-h-screen flex-col bg-stone-50 text-stone-900 md:flex-row">
       <AdminSidebar />
-      <main className="min-w-0 flex-1 p-5 sm:p-8 lg:p-10">
+      <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-10">
         <div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><p className="mb-2 text-[10px] uppercase tracking-[.25em] text-amber-800">Fulfilment</p><h1 className="font-serif text-3xl">Orders</h1><p className="mt-2 text-sm text-stone-500">Review purchases and keep customer orders up to date.</p></div><button onClick={load} className="flex items-center gap-2 border border-stone-300 bg-white px-4 py-3 text-xs uppercase tracking-wider"><RefreshCw size={14} />Refresh</button></div>
         {error && <div role="alert" className="mb-5 border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div>}
         <section className="border border-stone-200 bg-white">

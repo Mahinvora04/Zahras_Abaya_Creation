@@ -23,9 +23,9 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <div className="flex min-h-screen bg-stone-50 text-stone-900">
+    <div className="flex min-h-screen flex-col bg-stone-50 text-stone-900 md:flex-row">
       <AdminSidebar />
-      <main className="min-w-0 flex-1 p-5 sm:p-8 lg:p-10">
+      <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-10">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div><p className="mb-2 text-[10px] uppercase tracking-[.25em] text-amber-800">Store overview</p><h1 className="font-serif text-3xl">Good day</h1><p className="mt-2 text-sm text-stone-500">Your store at a glance.</p></div>
           <Link to="/admin/products/new" className="bg-stone-900 px-4 py-3 text-xs uppercase tracking-wider text-white hover:bg-amber-900">Add a product <ArrowUpRight className="ml-2 inline" size={15} /></Link>
@@ -45,7 +45,7 @@ export default function AdminDashboard() {
             <Link to="/admin/orders" className="text-xs uppercase tracking-wider text-amber-900">All orders →</Link>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="w-full min-w-[620px] text-left text-sm">
               <thead className="bg-stone-50 text-[10px] uppercase tracking-wider text-stone-500"><tr><th className="p-4">Order</th><th className="p-4">Customer</th><th className="p-4">Date</th><th className="p-4">Status</th><th className="p-4 text-right">Total</th></tr></thead>
               <tbody>
                 {(data?.recent_orders || []).map((order) => (

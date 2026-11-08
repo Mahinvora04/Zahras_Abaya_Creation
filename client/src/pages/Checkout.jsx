@@ -17,6 +17,7 @@ import { Link, useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import useAuthStore from "../store/authStore";
 import useCartStore from "../store/cartStore";
+import mediaUrl from "../utils/mediaUrl";
 
 const SHIPPING_FEE = 99;
 
@@ -459,11 +460,11 @@ export default function Checkout() {
                       key={`${item.product_id}:${item.variant_id || "none"}`}
                       className="flex flex-col sm:flex-row gap-4 items-start sm:items-center border-b border-stone-100 pb-6 last:border-0 last:pb-0"
                     >
-                      <img
-                        src={item.selectedVariant?.images?.[0] || "/images/placeholder.jpg"}
+                      {item.selectedVariant?.images?.[0] && <img
+                        src={mediaUrl(item.selectedVariant.images[0])}
                         alt={product.name}
                         className="w-20 h-24 object-cover object-top bg-stone-100 rounded-sm"
-                      />
+                      />}
                       <div className="flex-1 min-w-0 space-y-3">
                         <h3 className="font-serif text-base text-stone-900">
                           {product.name}

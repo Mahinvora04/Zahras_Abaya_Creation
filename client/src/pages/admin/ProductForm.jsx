@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../api/axios';
 import AdminSidebar from '../../components/AdminSidebar';
 import useProductStore from '../../store/productStore';
+import mediaUrl from '../../utils/mediaUrl';
 
 const commonSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'One Size'];
 const blankColor = () => ({ key: crypto.randomUUID(), color: '', colorHex: '#6b625d', sizes: [], price: '', originalPrice: '', description: '', images: [], isAvailable: true });
@@ -170,9 +171,9 @@ export default function ProductForm() {
   };
 
   return (
-    <div className="flex min-h-screen bg-stone-50 text-stone-900">
+    <div className="flex min-h-screen flex-col bg-stone-50 text-stone-900 md:flex-row">
       <AdminSidebar />
-      <main className="min-w-0 flex-1 p-5 sm:p-8 lg:p-10">
+      <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-10">
         <div className="mb-7"><p className="mb-2 text-[10px] uppercase tracking-[.25em] text-amber-800">Catalogue</p><h1 className="font-serif text-3xl">{isEdit ? 'Edit product' : 'Add product'}</h1><p className="mt-2 text-sm text-stone-500">Create color options and choose the sizes offered for each.</p></div>
         {msg && <div role="status" className="mb-5 border border-stone-200 bg-white p-3 text-sm">{msg}</div>}
         <form onSubmit={handleSubmit} className="max-w-4xl space-y-6">
@@ -204,7 +205,7 @@ export default function ProductForm() {
                 </div>
                 <div className="mt-4 border border-stone-100 bg-stone-50 p-3"><p className="mb-2 text-[10px] uppercase tracking-wider text-stone-500">Automatically generated SKUs</p><div className="flex flex-wrap gap-2">{group.sizes.length ? group.sizes.map((size) => <code key={size} className="bg-white px-2 py-1 text-[11px] text-stone-700">{variantSku(form.name, group.color, size)}</code>) : <span className="text-xs text-stone-400">Select sizes to preview SKUs</span>}</div></div>
                 <label className="mt-4 block text-xs uppercase tracking-wider text-stone-600">Description<textarea rows={3} value={group.description} onChange={(e) => updateColor(group.key, { description: e.target.value })} className="mt-2 w-full border border-stone-300 px-3 py-3 text-sm normal-case tracking-normal" /></label>
-                <div className="mt-5"><p className="mb-2 text-xs uppercase tracking-wider text-stone-600">Images for {group.color || 'this color'}</p><div className="flex flex-wrap items-center gap-3"><label className={`cursor-pointer border border-stone-300 px-3 py-2 text-xs uppercase tracking-wider hover:border-amber-800 ${uploadingKey === group.key ? 'pointer-events-none opacity-50' : ''}`}>{uploadingKey === group.key ? 'Uploading…' : 'Upload images'}<input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={Boolean(uploadingKey)} onChange={(e) => { uploadImages(group, [...e.target.files]); e.target.value = ''; }} className="sr-only" /></label><span className="text-[11px] text-stone-400">JPG, PNG or WebP · max 8 MB each</span></div>{group.images.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{group.images.map((image, imageIndex) => <div key={`${image}-${imageIndex}`} className="relative"><img src={image} alt={`${group.color} product ${imageIndex + 1}`} className="h-20 w-16 border border-stone-200 bg-stone-100 object-cover" /><button type="button" aria-label="Remove image" disabled={Boolean(deletingImage)} onClick={() => removeImage(group, image, imageIndex)} className="absolute -right-2 -top-2 rounded-full bg-stone-900 p-1 text-white disabled:opacity-50">{deletingImage === `${group.key}:${imageIndex}` ? <span className="block h-3 w-3 animate-pulse" /> : <X size={12} />}</button></div>)}</div>}</div>
+                <div className="mt-5"><p className="mb-2 text-xs uppercase tracking-wider text-stone-600">Images for {group.color || 'this color'}</p><div className="flex flex-wrap items-center gap-3"><label className={`cursor-pointer border border-stone-300 px-3 py-2 text-xs uppercase tracking-wider hover:border-amber-800 ${uploadingKey === group.key ? 'pointer-events-none opacity-50' : ''}`}>{uploadingKey === group.key ? 'Uploading…' : 'Upload images'}<input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={Boolean(uploadingKey)} onChange={(e) => { uploadImages(group, [...e.target.files]); e.target.value = ''; }} className="sr-only" /></label><span className="text-[11px] text-stone-400">JPG, PNG or WebP · max 8 MB each</span></div>{group.images.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{group.images.map((image, imageIndex) => <div key={`${image}-${imageIndex}`} className="relative"><img src={mediaUrl(image)} alt={`${group.color} product ${imageIndex + 1}`} className="h-20 w-16 border border-stone-200 bg-stone-100 object-cover" /><button type="button" aria-label="Remove image" disabled={Boolean(deletingImage)} onClick={() => removeImage(group, image, imageIndex)} className="absolute -right-2 -top-2 rounded-full bg-stone-900 p-1 text-white disabled:opacity-50">{deletingImage === `${group.key}:${imageIndex}` ? <span className="block h-3 w-3 animate-pulse" /> : <X size={12} />}</button></div>)}</div>}</div>
                 <label className="mt-5 flex items-center gap-2 text-sm"><input type="checkbox" checked={group.isAvailable} onChange={(e) => updateColor(group.key, { isAvailable: e.target.checked })} />Available to order in selected sizes</label>
                 <p className="mt-4 text-xs text-stone-500">This color will create {group.sizes.length} variant{group.sizes.length === 1 ? '' : 's'}: {group.sizes.length ? group.sizes.join(', ') : 'select at least one size'}.</p>
               </article>

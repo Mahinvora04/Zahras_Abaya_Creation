@@ -1,9 +1,7 @@
 import { Gem, Heart, Scissors, Sparkles } from 'lucide-react';
 
 import { Link } from 'react-router-dom';
-import about1 from '../assets/about/about_1.png';
-import about2 from '../assets/about/about_2.jpeg';
-import about3 from '../assets/about/about_3.jpeg';
+import mediaUrl from '../utils/mediaUrl';
 
 export default function About() {
   return (
@@ -13,7 +11,7 @@ export default function About() {
       <section className="relative h-[60vh] min-h-[400px] flex items-center justify-center bg-stone-900 text-white overflow-hidden">
         <div className="absolute inset-0 opacity-40">
           <img 
-            src={about1}
+            src={mediaUrl('/uploads/about/about_1.png')}
             alt="Luxury Fabric" 
             className="w-full h-full object-cover"
           />
@@ -36,7 +34,7 @@ export default function About() {
         <div className="grid md:grid-cols-2 gap-16 items-center">
           <div className="relative">
             <img 
-              src={about2}
+              src={mediaUrl('/uploads/about/about_2.jpeg')}
               alt="Our Atelier" 
               className="w-full h-[500px] object-cover rounded-sm shadow-xl"
             />
@@ -129,7 +127,7 @@ export default function About() {
           </div>
           <div className="order-1 md:order-2 relative">
             <img 
-              src={about3} 
+              src={mediaUrl('/uploads/about/about_3.jpeg')} 
               alt="Tailoring Process" 
               className="w-full h-[500px] object-cover rounded-sm shadow-xl"
             />

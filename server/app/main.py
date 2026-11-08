@@ -3,6 +3,8 @@ import re
 import unicodedata
 import logging
 import hmac
+import hashlib
+import json
 from pathlib import Path
 from datetime import datetime, timedelta
 from google.auth.exceptions import GoogleAuthError
@@ -39,6 +41,12 @@ async def ensure_google_subject_index():
         partialFilterExpression={"google_sub": {"$type": "string"}},
     )
     await db.product_reviews.create_index("product_id")
+    await db.orders.create_index(
+        [("user_id", 1), ("checkout_version", 1)],
+        name="user_checkout_version_unique",
+        unique=True,
+        partialFilterExpression={"checkout_version": {"$type": "string"}},
+    )
     used_slugs = set()
     async for product in db.products.find({}, {"name": 1, "slug": 1}).sort("_id", 1):
         base_slug = slugify_product_name(product.get("name", ""))
@@ -271,6 +279,7 @@ class CategoryImageReq(BaseModel):
 class SlideReq(BaseModel):
     title: str = Field(min_length=1, max_length=120)
     image: str = Field(min_length=1)
+    mobile_image: str = Field(min_length=1)
     tagline: str = ""
     subtitle: str = ""
     link: str = "/products"
@@ -320,6 +329,7 @@ class UpdateCartItemReq(BaseModel):
 
 class CreateOrderReq(BaseModel):
     address_id: str
+    payment_method: str = "on_delivery"
 
 class OrderReviewReq(BaseModel):
     product_id: str
@@ -760,8 +770,9 @@ async def update_admin_slide(slide_id: str, req: SlideReq, admin: dict = Depends
     result = await db.slides.update_one({"_id": object_id}, {"$set": slide_doc})
     if not result.matched_count:
         raise HTTPException(status_code=404, detail="Banner not found")
-    if existing.get("image") != slide_doc.get("image"):
-        delete_uploaded_image_file(existing.get("image"))
+    for image_field in ("image", "mobile_image"):
+        if existing.get(image_field) != slide_doc.get(image_field):
+            delete_uploaded_image_file(existing.get(image_field))
     slide = await db.slides.find_one({"_id": object_id})
     return {"success": True, "slide": serialize_doc(slide)}
 
@@ -803,7 +814,8 @@ async def delete_admin_slide(slide_id: str, admin: dict = Depends(get_admin_user
     result = await db.slides.delete_one({"_id": object_id})
     if not result.deleted_count:
         raise HTTPException(status_code=404, detail="Banner not found")
-    delete_uploaded_image_file(slide.get("image"))
+    for image_url in {slide.get("image"), slide.get("mobile_image")}:
+        delete_uploaded_image_file(image_url)
     return {"success": True, "message": "Banner deleted"}
 
 @app.post("/api/admin/uploads/images")
@@ -1386,6 +1398,8 @@ async def clear_cart(
 
 @app.post("/api/orders", status_code=201)
 async def create_order(req: CreateOrderReq, current_user: dict = Depends(get_current_user)):
+    if req.payment_method not in ("on_delivery", "upi"):
+        raise HTTPException(status_code=400, detail="Select a valid payment method")
     user_id = ObjectId(current_user["_id"])
     user = await db.users.find_one({"_id": user_id})
     if not user:
@@ -1425,7 +1439,9 @@ async def create_order(req: CreateOrderReq, current_user: dict = Depends(get_cur
         if variant and not variant.get("isAvailable", True):
             raise HTTPException(status_code=409, detail=f"{product.get('name', 'A product')} is no longer available")
 
-        quantity = max(1, int(cart_item.get("quantity", 1)))
+        quantity = int(cart_item.get("quantity", 1))
+        if quantity < 1 or quantity > 99:
+            raise HTTPException(status_code=400, detail="A cart item has an invalid quantity; update it before checkout")
         selected_variant = variant or cart_item.get("selectedVariant") or {}
         unit_price = selected_variant.get("price", product.get("price", 0))
         line_total = unit_price * quantity
@@ -1447,27 +1463,70 @@ async def create_order(req: CreateOrderReq, current_user: dict = Depends(get_cur
 
     shipping_fee = 99
     now = datetime.utcnow()
+    checkout_version = hashlib.sha256(json.dumps({
+        "cart": str(cart["_id"]),
+        "updated_at": cart.get("updated_at").isoformat() if isinstance(cart.get("updated_at"), datetime) else str(cart.get("updated_at", "")),
+        "payment_method": req.payment_method,
+        "items": [{
+            "product_id": item.get("product_id"),
+            "quantity": item.get("quantity"),
+            "variant_id": item.get("variant_id") or (item.get("selectedVariant") or {}).get("variant_id"),
+        } for item in cart["items"]],
+    }, sort_keys=True).encode()).hexdigest()
     order_doc = {
         "order_number": f"ZAH-{now.strftime('%Y%m%d')}-{uuid4().hex[:6].upper()}",
         "user_id": user_id,
+        "checkout_version": checkout_version,
+        "payment_method": req.payment_method,
         "items": order_items,
         "shipping_address": serialize_doc(address),
         "phone": user["phone"],
         "subtotal": subtotal,
         "shipping_fee": shipping_fee,
         "total": subtotal + shipping_fee,
-        "status": "confirmed",
+        "status": "pending_payment" if req.payment_method == "upi" else "confirmed",
         "payment_status": "pending",
         "created_at": now,
         "updated_at": now,
     }
-    result = await db.orders.insert_one(order_doc)
+    try:
+        result = await db.orders.insert_one(order_doc)
+    except Exception as exc:
+        if getattr(exc, "code", None) != 11000:
+            raise
+        existing_order = await db.orders.find_one({"user_id": user_id, "checkout_version": checkout_version})
+        if not existing_order:
+            raise
+        return {"success": True, "order": serialize_doc(existing_order)}
     order_doc["_id"] = result.inserted_id
     await db.carts.update_one(
         {"_id": cart["_id"]},
         {"$set": {"items": [], "updated_at": datetime.utcnow()}},
     )
     return {"success": True, "order": serialize_doc(order_doc)}
+
+
+@app.post("/api/orders/{order_id}/confirm-payment")
+async def confirm_upi_payment(order_id: str, current_user: dict = Depends(get_current_user)):
+    try:
+        order_object_id = ObjectId(order_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Order not found")
+    query = {"_id": order_object_id, "user_id": ObjectId(current_user["_id"])}
+    order = await db.orders.find_one(query)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.get("payment_method") != "upi":
+        raise HTTPException(status_code=409, detail="This order does not use UPI payment")
+    if order.get("status") == "confirmed":
+        return {"success": True, "order": serialize_doc(order)}
+    if order.get("status") != "pending_payment":
+        raise HTTPException(status_code=409, detail="This order cannot be confirmed")
+    await db.orders.update_one(
+        {**query, "status": "pending_payment"},
+        {"$set": {"status": "confirmed", "payment_status": "pending", "updated_at": datetime.utcnow()}},
+    )
+    return {"success": True, "order": serialize_doc(await db.orders.find_one(query))}
 
 
 @app.get("/api/orders")

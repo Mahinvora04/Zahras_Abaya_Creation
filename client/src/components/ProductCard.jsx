@@ -1,9 +1,10 @@
-import { Eye, ShoppingBag, Star } from 'lucide-react';
+import { Eye, ImageOff, ShoppingBag, Star } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import useAuthStore from '../store/authStore';
 import useCartStore from '../store/cartStore';
 import { getProductSlug } from '../utils/productSlug';
+import mediaUrl from '../utils/mediaUrl';
 
 export default function ProductCard({ product }) {
   const addItem = useCartStore((s) => s.addItem);
@@ -20,7 +21,7 @@ export default function ProductCard({ product }) {
     product.variants?.[0] ||
     null;
   const variantImages = defaultVariant?.images || [];
-  const mainImage = variantImages[0] || '/images/placeholder.jpg';
+  const mainImage = variantImages[0] || '';
   const secondaryImage = variantImages[1] || mainImage;
   const displayPrice = defaultVariant?.price;
   const displayOriginalPrice = defaultVariant?.originalPrice;
@@ -90,16 +91,20 @@ export default function ProductCard({ product }) {
         {/* Image Container with Dual Image Swap */}
         <div className="relative aspect-[3/4] w-full overflow-hidden bg-stone-100">
           <Link to={`/product/${productSlug}`} className="block w-full h-full">
-            <img
-              src={mainImage}
-              alt={product.name}
-              className={`w-full h-full object-cover object-top transition-all duration-700 ease-out group-hover:scale-105 ${
-                variantImages[1] ? 'group-hover:opacity-0' : ''
-              }`}
-            />
+            {mainImage ? (
+              <img
+                src={mediaUrl(mainImage)}
+                alt={product.name}
+                className={`w-full h-full object-cover object-top transition-all duration-700 ease-out group-hover:scale-105 ${
+                  variantImages[1] ? 'group-hover:opacity-0' : ''
+                }`}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-stone-400"><ImageOff aria-hidden="true" /></div>
+            )}
             {variantImages[1] && (
               <img
-                src={secondaryImage}
+                src={mediaUrl(secondaryImage)}
                 alt={`${product.name} alternate view`}
                 className="absolute inset-0 w-full h-full object-cover object-top opacity-0 transition-all duration-700 ease-out group-hover:opacity-100 group-hover:scale-105"
               />

@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Image, Plus, Save, Trash2, Upload } from 'lucide-react';
 import AdminSidebar from '../../components/AdminSidebar';
 import api from '../../api/axios';
+import mediaUrl from '../../utils/mediaUrl';
 
-const emptyBanner = (order = 0) => ({ title: '', image: '', tagline: '', subtitle: '', link: '/products', cta: 'Shop Now', order });
+const emptyBanner = (order = 0) => ({ title: '', image: '', mobile_image: '', tagline: '', subtitle: '', link: '/products', cta: 'Shop Now', order });
 const categoryDestinations = [
   { label: 'All Products', value: '' },
   { label: 'Embroidered Abaya', value: 'Embroidered Abaya' },
@@ -57,11 +58,11 @@ export default function AdminBanners() {
     else setSlides((items) => items.map((banner) => banner._id === id ? { ...banner, ...patch } : banner));
   };
 
-  const uploadBannerImage = async (id, file) => {
+  const uploadBannerImage = async (id, imageField, file) => {
     if (!file) return;
     const banner = id === 'new' ? newBanner : slides.find((item) => item._id === id);
     if (!banner?.title?.trim()) {
-      setError('Enter a banner title before uploading its image.');
+      setError('Enter a banner title before uploading its images.');
       return;
     }
     setUploadingId(id);
@@ -71,7 +72,7 @@ export default function AdminBanners() {
     body.append('file', file);
     try {
       const { data } = await api.post('/admin/uploads/banners', body, { headers: { 'Content-Type': undefined } });
-      updateBanner(id, { image: data.image });
+      updateBanner(id, { [imageField]: data.image });
     } catch (requestError) {
       setError(requestError.response?.data?.detail || 'Could not upload banner image.');
     } finally {
@@ -80,8 +81,8 @@ export default function AdminBanners() {
   };
 
   const saveBanner = async (banner, id = banner._id || 'new') => {
-    if (!banner.title?.trim() || !banner.image?.trim()) {
-      setError('Each banner needs a title and image.');
+    if (!banner.title?.trim() || !banner.image?.trim() || !banner.mobile_image?.trim()) {
+      setError('Each banner needs a title, a horizontal desktop image, and a vertical mobile image.');
       return;
     }
     if (!banner.link?.startsWith('/')) {
@@ -91,7 +92,7 @@ export default function AdminBanners() {
     setSavingId(id);
     setError('');
     setNotice('');
-    const payload = { ...banner, title: banner.title.trim(), image: banner.image.trim(), order: Number(banner.order) || 0 };
+    const payload = { ...banner, title: banner.title.trim(), image: banner.image.trim(), mobile_image: banner.mobile_image.trim(), order: Number(banner.order) || 0 };
     try {
       if (id === 'new') {
         const { data } = await api.post('/admin/slides', payload);
@@ -159,8 +160,17 @@ export default function AdminBanners() {
     return (
     <article className="border border-stone-200 bg-white p-5 sm:p-6">
       <div className="mb-5 flex items-center justify-between"><div className="flex items-center gap-2"><Image size={17} className="text-amber-900" /><h2 className="font-serif text-xl">{id === 'new' ? 'New storefront banner' : `Banner ${Number(banner.order) + 1}`}</h2></div>{onCancel && <button type="button" onClick={onCancel} className="text-xs text-stone-500 hover:text-stone-900">Cancel</button>}</div>
-      <div className="grid gap-5 lg:grid-cols-[220px_1fr]">
-        <div><div className="aspect-[4/3] overflow-hidden bg-stone-100">{banner.image ? <img src={banner.image} alt={banner.title || 'Banner preview'} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-xs text-stone-400">Banner preview</div>}</div><label className={`mt-3 inline-flex cursor-pointer items-center gap-2 border border-stone-300 px-3 py-2 text-xs uppercase tracking-wider hover:border-amber-800 ${uploadingId === id ? 'pointer-events-none opacity-50' : ''}`}><Upload size={14} />{uploadingId === id ? 'Uploading…' : 'Upload image'}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={Boolean(uploadingId)} onChange={(event) => { uploadBannerImage(id, event.target.files?.[0]); event.target.value = ''; }} className="sr-only" /></label><p className="mt-2 text-[10px] text-stone-400">JPG, PNG or WebP · max 8 MB</p></div>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <div className="grid grid-cols-2 items-start gap-3">
+          {[{ field: 'image', label: 'Horizontal desktop', ratio: 'aspect-[16/9]' }, { field: 'mobile_image', label: 'Vertical mobile', ratio: 'aspect-[3/4]' }].map(({ field, label, ratio }) => (
+            <div key={field} className="min-w-0">
+              <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-stone-600">{label} image <span className="text-rose-700">*</span></p>
+              <div className={`${ratio} overflow-hidden border border-stone-200 bg-stone-100`}>{banner[field] ? <img src={mediaUrl(banner[field])} alt={`${banner.title || 'Banner'} ${label.toLowerCase()} preview`} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center px-2 text-center text-xs text-stone-400">Upload {label.toLowerCase()} image</div>}</div>
+              <label className={`mt-3 inline-flex w-full cursor-pointer items-center justify-center gap-2 border border-stone-300 px-2 py-2 text-[10px] uppercase tracking-wider hover:border-amber-800 sm:text-xs ${uploadingId === id ? 'pointer-events-none opacity-50' : ''}`}><Upload size={14} />{uploadingId === id ? 'Uploading…' : 'Upload image'}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={Boolean(uploadingId)} onChange={(event) => { uploadBannerImage(id, field, event.target.files?.[0]); event.target.value = ''; }} className="sr-only" /></label>
+            </div>
+          ))}
+          <p className="col-span-2 text-[10px] text-stone-400">JPG, PNG or WebP · max 8 MB per image</p>
+        </div>
         <div className="grid content-start gap-4 sm:grid-cols-2">
           <label className="text-xs uppercase tracking-wider text-stone-500">Banner title *<input value={banner.title || ''} onChange={(event) => updateBanner(id, { title: event.target.value })} className="mt-2 w-full border border-stone-300 px-3 py-2.5 text-sm normal-case tracking-normal text-stone-900" /></label>
           <label className="text-xs uppercase tracking-wider text-stone-500">Tagline<input value={banner.tagline || ''} onChange={(event) => updateBanner(id, { tagline: event.target.value })} className="mt-2 w-full border border-stone-300 px-3 py-2.5 text-sm normal-case tracking-normal text-stone-900" /></label>
@@ -177,7 +187,7 @@ export default function AdminBanners() {
   };
 
   return (
-    <div className="flex min-h-screen bg-stone-50 text-stone-900"><AdminSidebar /><main className="min-w-0 flex-1 p-5 sm:p-8 lg:p-10">
+    <div className="flex min-h-screen flex-col bg-stone-50 text-stone-900 md:flex-row"><AdminSidebar /><main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-10">
       <div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><p className="mb-2 text-[10px] uppercase tracking-[.25em] text-amber-800">Storefront</p><h1 className="font-serif text-3xl">Banners</h1><p className="mt-2 text-sm text-stone-500">Edit the homepage hero carousel images, text, links, and order.</p></div><button type="button" onClick={() => setNewBanner((current) => current ? null : emptyBanner(slides.length))} className="bg-stone-900 px-4 py-3 text-xs uppercase tracking-wider text-white hover:bg-amber-900"><Plus size={15} className="mr-2 inline" />Add banner</button></div>
       {error && <div role="alert" className="mb-5 border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div>}{notice && <div role="status" className="mb-5 border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</div>}
       <div className="space-y-5">{newBanner && renderBannerEditor(newBanner, 'new', () => setNewBanner(null))}{loading ? <p className="border border-stone-200 bg-white p-10 text-center text-sm text-stone-500">Loading banners…</p> : slides.length ? slides.map((banner) => <div key={banner._id}>{renderBannerEditor(banner, banner._id)}</div>) : !newBanner && <p className="border border-stone-200 bg-white p-10 text-center text-sm text-stone-500">No banners yet. Add one to populate the homepage carousel.</p>}</div>

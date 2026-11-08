@@ -5,3 +5,33 @@
 body {
   @apply bg-gray-50 text-gray-900;
 }
+
+:root {
+  accent-color: #78350f;
+}
+
+select {
+  accent-color: #78350f;
+}
+
+select:hover:not(:disabled) {
+  border-color: #78350f;
+}
+
+select:focus-visible {
+  border-color: #78350f;
+  outline: 2px solid rgb(120 53 15 / 24%);
+  outline-offset: 2px;
+}
+
+select option {
+  background-color: #fff;
+  color: #292524;
+}
+
+select option:hover,
+select option:focus,
+select option:checked {
+  background-color: #000;
+  color: #fff;
+}

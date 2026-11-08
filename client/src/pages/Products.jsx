@@ -11,6 +11,7 @@ import {
 import { useEffect, useState } from "react";
 
 import ProductCard from "../components/ProductCard";
+import ThemedSelect from "../components/ThemedSelect";
 import useContentStore from "../store/contentStore";
 import useProductStore from "../store/productStore";
 import { useSearchParams } from "react-router-dom";
@@ -168,7 +169,7 @@ export default function Products() {
             Exquisite Craftsmanship
           </span>
           <h1 className="text-3xl sm:text-5xl font-serif text-stone-900 font-light">
-            {category === "All" ? "Shop All Collections" : category}
+            {category === "All" ? "All Collections" : category}
           </h1>
           <div className="w-12 h-0.5 bg-amber-800/40 mx-auto" />
           <p className="text-xs sm:text-sm text-stone-500 font-light leading-relaxed">
@@ -336,17 +337,18 @@ export default function Products() {
                   </span>
                   <div className="flex items-center gap-2">
                     <label htmlFor="sort-select" className="text-xs font-medium uppercase tracking-wider text-stone-600 shrink-0 hidden sm:inline">Sort:</label>
-                    <select
+                    <ThemedSelect
                       id="sort-select"
                       value={sort}
-                      onChange={(e) => applyFilter({ sort: e.target.value })}
-                      className="bg-stone-50/60 border border-stone-200 rounded-sm px-3 py-2 text-xs text-stone-900 font-medium focus:outline-none focus:border-stone-900 cursor-pointer"
-                    >
-                      <option value="newest">Newest Arrivals</option>
-                      <option value="price-low">Price: Low to High</option>
-                      <option value="price-high">Price: High to Low</option>
-                      <option value="rating">Top Rated</option>
-                    </select>
+                      onChange={(value) => applyFilter({ sort: value })}
+                      ariaLabel="Sort products"
+                      options={[
+                        { value: "newest", label: "Newest Arrivals" },
+                        { value: "price-low", label: "Price: Low to High" },
+                        { value: "price-high", label: "Price: High to Low" },
+                        { value: "rating", label: "Top Rated" },
+                      ]}
+                    />
                   </div>
                 </div>
               </div>

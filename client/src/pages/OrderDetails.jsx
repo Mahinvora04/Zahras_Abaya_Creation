@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import api from "../api/axios";
+import mediaUrl from "../utils/mediaUrl";
 
 const formatPrice = (amount) => `₹${Number(amount || 0).toLocaleString("en-IN")}`;
 const formatStatus = (status) => {
@@ -135,11 +136,11 @@ export default function OrderDetails() {
               return (
                 <article key={key} className="border border-stone-200 bg-white p-5 sm:p-6">
                   <div className="flex gap-4">
-                    <img
-                      src={item.images?.[0] || "/images/placeholder.jpg"}
+                    {item.images?.[0] && <img
+                      src={mediaUrl(item.images[0])}
                       alt={item.product_name}
                       className="h-28 w-24 shrink-0 bg-stone-100 object-cover object-top"
-                    />
+                    />}
                     <div className="min-w-0 flex-1">
                       <h2 className="font-serif text-lg text-stone-900">{item.product_name}</h2>
                       {(item.color || item.size) && (

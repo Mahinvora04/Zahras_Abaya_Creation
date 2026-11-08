@@ -1,10 +1,11 @@
 import { ArrowLeft, CheckCircle2, CircleAlert, QrCode } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+
 import { QRCodeSVG } from "qrcode.react";
 import api from "../api/axios";
 
-const UPI_ID = "mahinsabbirhusen@oksbi";
+const UPI_ID = "q042227037@ybl";
 const formatPrice = (amount) => `₹${Number(amount || 0).toLocaleString("en-IN")}`;
 
 export default function UpiPayment() {

@@ -31,9 +31,9 @@ export default function AdminCustomerOrders() {
   const lifetimeValue = orders.filter((order) => order.status !== 'cancelled').reduce((total, order) => total + Number(order.total || 0), 0);
 
   return (
-    <div className="flex min-h-screen bg-stone-50 text-stone-900">
+    <div className="flex min-h-screen flex-col bg-stone-50 text-stone-900 md:flex-row">
       <AdminSidebar />
-      <main className="min-w-0 flex-1 p-5 sm:p-8 lg:p-10">
+      <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-10">
         <Link to="/admin/orders" className="mb-6 inline-flex items-center gap-2 text-xs uppercase tracking-wider text-stone-600 hover:text-amber-900"><ArrowLeft size={15} />Back to orders</Link>
         {error && <div role="alert" className="mb-5 border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div>}
         {loading ? <p className="py-16 text-center text-sm text-stone-500">Loading customer history…</p> : customer && <>

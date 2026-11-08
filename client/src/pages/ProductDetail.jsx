@@ -14,6 +14,7 @@ import useAuthStore from "../store/authStore";
 import useCartStore from "../store/cartStore";
 import useProductStore from "../store/productStore";
 import ProductReviews from "../components/ProductReviews";
+import mediaUrl from "../utils/mediaUrl";
 
 // Main component handles fetching and loading states
 export default function ProductDetail() {
@@ -230,11 +231,15 @@ function ProductDetailInner({ product }) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16">
           <div className="space-y-4">
             <div className="aspect-[3/4] w-full bg-stone-100 rounded-sm overflow-hidden relative group">
-              <img
-                src={mainImage}
-                alt={product.name}
-                className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105"
-              />
+              {mainImage ? (
+                <img
+                  src={mediaUrl(mainImage)}
+                  alt={product.name}
+                  className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105"
+                />
+              ) : (
+                <div className="h-full w-full bg-stone-100" />
+              )}
               {discount > 0 && (
                 <span className="absolute top-4 left-4 bg-stone-900 text-amber-200 text-xs font-medium tracking-widest uppercase px-3 py-1.5">
                   -{discount}% OFF
@@ -255,7 +260,7 @@ function ProductDetailInner({ product }) {
                     }`}
                   >
                     <img
-                      src={img}
+                      src={mediaUrl(img)}
                       alt={`Thumbnail ${idx + 1}`}
                       className="w-full h-full object-cover"
                     />
