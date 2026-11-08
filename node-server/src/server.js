@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const { PORT, SECRET } = require('./config');
+const { HOST, PORT, SECRET } = require('./config');
 const { connectDatabase } = require('./database');
 const { createApp } = require('./app');
 
@@ -11,8 +11,8 @@ async function start() {
 
   const { client, db } = await connectDatabase(process.env.MONGO_URI || '');
   const app = createApp(db);
-  const server = app.listen(PORT, () => {
-    console.log(`Node API listening on port ${PORT}`);
+  const server = app.listen(PORT, HOST, () => {
+    console.log(`Node API listening on ${HOST}:${PORT}`);
   });
 
   const close = async () => {

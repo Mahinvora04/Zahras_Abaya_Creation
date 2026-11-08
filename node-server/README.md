@@ -27,3 +27,7 @@ Uploaded images are stored in `uploads/` by purpose, and MongoDB image URLs use 
 Admin uploads go into `products/`, `banners/`, or `categories/` automatically. To review existing image references and unused upload files, run `node scripts/organize_uploads.js` from this folder. Add `--apply` only when you intend to update MongoDB paths, move referenced files, and delete image files not referenced by any MongoDB collection or frontend source.
 
 This is a new implementation, so validate it against a staging database and frontend before switching production traffic. Do not run the Python and Node APIs against the same upload directory while editing files.
+
+## Test from a phone on the same Wi-Fi
+
+Start the frontend with `npm run dev` from `client/` and the API with `npm run dev` from `node-server/`. Vite and the API bind to `0.0.0.0`; the frontend selects the API host from the hostname used to open the page, so no phone-specific `localhost` URL is needed. Open `http://<computer-LAN-IP>:5173/` on the phone. Development CORS permits Vite origins from private IPv4 networks. Ensure the phone and computer are on the same network and that Windows Firewall allows Node.js on the private network.

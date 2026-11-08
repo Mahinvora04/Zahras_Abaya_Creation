@@ -1,11 +1,12 @@
-import { ArrowLeft, CheckCircle2, CircleAlert, QrCode } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CircleAlert, ExternalLink, QrCode } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { QRCodeSVG } from "qrcode.react";
 import api from "../api/axios";
 
 const UPI_ID = "q042227037@ybl";
+const WHATSAPP_NUMBER = "919999999999";
 const formatPrice = (amount) => `₹${Number(amount || 0).toLocaleString("en-IN")}`;
 
 export default function UpiPayment() {
@@ -15,6 +16,8 @@ export default function UpiPayment() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [whatsappOpened, setWhatsappOpened] = useState(false);
+  const upiLaunchAttempted = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -44,6 +47,22 @@ export default function UpiPayment() {
       tn: `Order ${order.order_number}`,
     });
     return `upi://pay?${params.toString()}`;
+  }, [order]);
+
+  useEffect(() => {
+    if (!paymentUri || !order || order.status !== "pending_payment" || upiLaunchAttempted.current) return undefined;
+    if (!/android|iphone|ipad|ipod/i.test(navigator.userAgent)) return undefined;
+
+    upiLaunchAttempted.current = true;
+    const launchTimer = window.setTimeout(() => {
+      window.location.href = paymentUri;
+    }, 600);
+    return () => window.clearTimeout(launchTimer);
+  }, [order, paymentUri]);
+
+  const whatsappMessage = useMemo(() => {
+    if (!order) return "";
+    return `Hi, I have made the UPI payment for order ${order.order_number} (${formatPrice(order.total)}). I am sharing the payment screenshot for confirmation.`;
   }, [order]);
 
   const confirmPayment = async () => {
@@ -105,12 +124,34 @@ export default function UpiPayment() {
               <p className="mt-1 text-3xl font-medium text-stone-900">{formatPrice(order.total)}</p>
               <p className="mt-3 text-sm text-stone-600">UPI ID: <span className="font-medium text-stone-900">{UPI_ID}</span></p>
 
+              <a
+                href={paymentUri}
+                className="mt-4 inline-flex items-center gap-2 border border-stone-300 px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-stone-800 transition hover:border-black hover:bg-black hover:text-white"
+              >
+                <ExternalLink className="h-4 w-4" /> Open UPI app
+              </a>
+
+              <div className="mt-6 border-t border-stone-100 pt-5">
+                <p className="text-sm font-medium text-stone-900">Share your payment screenshot</p>
+                <p className="mt-1 text-xs leading-5 text-stone-500">Send the screenshot to our WhatsApp number. Attach and send it in WhatsApp, then return here to confirm your order.</p>
+                <a
+                  href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappMessage)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setWhatsappOpened(true)}
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 bg-[#25D366] px-5 py-3 text-xs font-semibold uppercase tracking-wider text-white transition hover:bg-[#1eaa52]"
+                >
+                  <ExternalLink className="h-4 w-4" /> Send screenshot on WhatsApp
+                </a>
+                <p className="mt-2 text-[11px] text-stone-400">Temporary contact: +{WHATSAPP_NUMBER}</p>
+              </div>
+
               {error && <p role="alert" className="mt-5 flex items-center justify-center gap-2 border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800"><CircleAlert className="h-4 w-4 shrink-0" />{error}</p>}
 
-              <button type="button" onClick={confirmPayment} disabled={saving} className="mt-7 w-full bg-stone-900 px-6 py-3.5 text-xs uppercase tracking-widest text-white hover:bg-amber-900 disabled:opacity-50">
+              <button type="button" onClick={confirmPayment} disabled={saving || !whatsappOpened} className="mt-5 w-full bg-stone-900 px-6 py-3.5 text-xs uppercase tracking-widest text-white hover:bg-amber-900 disabled:cursor-not-allowed disabled:opacity-40">
                 {saving ? "Confirming order…" : "Finished payment"}
               </button>
-              <p className="mt-3 text-xs leading-5 text-stone-500">After paying in your UPI app, press the button above. Payment is not automatically verified, so its status will remain pending until the store confirms receipt.</p>
+              <p className="mt-3 text-xs leading-5 text-stone-500">{whatsappOpened ? "After you have sent the screenshot, press the button above. Payment is not automatically verified and will remain pending until the store confirms receipt." : "Open WhatsApp and share your screenshot before you can confirm this order."}</p>
             </>
           )}
         </section>
