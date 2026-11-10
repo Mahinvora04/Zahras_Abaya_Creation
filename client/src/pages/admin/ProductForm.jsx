@@ -7,7 +7,16 @@ import useProductStore from '../../store/productStore';
 import mediaUrl from '../../utils/mediaUrl';
 
 const commonSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'One Size'];
-const blankColor = () => ({ key: crypto.randomUUID(), color: '', colorHex: '#6b625d', sizes: [], price: '', originalPrice: '', description: '', images: [], isAvailable: true });
+const createColorKey = () => {
+  if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
+  if (typeof globalThis.crypto?.getRandomValues === 'function') {
+    const values = new Uint32Array(2);
+    globalThis.crypto.getRandomValues(values);
+    return `${values[0].toString(36)}-${values[1].toString(36)}-${Date.now().toString(36)}`;
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+};
+const blankColor = () => ({ key: createColorKey(), color: '', colorHex: '#6b625d', sizes: [], price: '', originalPrice: '', description: '', images: [], isAvailable: true });
 const skuPart = (value) => value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/&/g, ' and ').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toUpperCase();
 const variantSku = (name, color, size) => [name, color, size].map(skuPart).filter(Boolean).join('-');
 
