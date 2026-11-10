@@ -1,0 +1,41 @@
+
+name: Deploy Zahras Abaya
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux, x64]
+
+    steps:
+      - name: Deploy application
+        shell: bash
+        run: |
+          set -e
+
+          cd /home/ubuntu/apps/Zahras_Abaya_Creation
+
+          echo "Pulling latest code..."
+          git pull --ff-only origin main
+
+          echo "Installing frontend dependencies..."
+          cd client
+          npm ci
+
+          echo "Installing backend dependencies..."
+          cd ../node-server
+          npm ci
+
+          echo "Restarting backend..."
+          pm2 restart zahra-backend --update-env
+
+          echo "Restarting frontend..."
+          pm2 restart zahra-frontend --update-env
+
+          pm2 save
+
+          echo "Deployment successful!"
