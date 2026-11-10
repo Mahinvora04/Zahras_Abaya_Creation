@@ -1,6 +1,7 @@
-import { Gem, Heart, Scissors, Sparkles } from 'lucide-react';
+import { ArrowUpRight, Gem, Heart, Mail, MapPin, Phone, Scissors, Sparkles } from 'lucide-react';
 
 import { Link } from 'react-router-dom';
+import { storeContact } from '../config/storeContact';
 import mediaUrl from '../utils/mediaUrl';
 
 export default function About() {
@@ -144,6 +145,65 @@ export default function About() {
             "Where modesty meets timeless elegance. At Zahra’s Abaya Creation, we craft beautiful abayas that blend refined designs, graceful details, and effortless comfort, making every woman feel confident, beautiful, and truly special."
           </blockquote>
           <div className="w-16 h-0.5 bg-amber-800/40 mx-auto mb-6" />
+        </div>
+      </section>
+
+      {/* ----------------- SHOP CONTACT DETAILS ----------------- */}
+      <section className="border-y border-stone-200 bg-white py-20 sm:py-24">
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="mx-auto mb-12 max-w-2xl text-center">
+            <span className="text-xs font-medium uppercase tracking-[0.2em] text-amber-800">
+              Visit or Contact Us
+            </span>
+            <h2 className="mt-3 font-serif text-3xl font-light text-stone-900 sm:text-4xl">
+              We&apos;d love to hear from you
+            </h2>
+            <p className="mt-4 text-sm leading-6 text-stone-600">
+              Visit our shop or get in touch with our team for help with your order.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <article className="border border-stone-200 bg-stone-50/60 p-6">
+              <MapPin aria-hidden="true" className="h-5 w-5 text-amber-800" />
+              <h3 className="mt-4 font-serif text-lg text-stone-900">Shop address</h3>
+              <address className="mt-2 text-sm not-italic leading-6 text-stone-600">
+                {storeContact.address}
+              </address>
+              <a
+                href={storeContact.directionsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-amber-900 transition-colors hover:text-stone-900"
+              >
+                Get directions <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+              </a>
+            </article>
+
+            <article className="border border-stone-200 bg-stone-50/60 p-6">
+              <Phone aria-hidden="true" className="h-5 w-5 text-amber-800" />
+              <h3 className="mt-4 font-serif text-lg text-stone-900">Call us</h3>
+              <p className="mt-2 text-sm text-stone-600">Speak with us about your order or visit.</p>
+              <a
+                href={storeContact.phoneHref}
+                className="mt-4 inline-block text-sm font-medium text-stone-900 transition-colors hover:text-amber-900"
+              >
+                {storeContact.phone}
+              </a>
+            </article>
+
+            <article className="border border-stone-200 bg-stone-50/60 p-6">
+              <Mail aria-hidden="true" className="h-5 w-5 text-amber-800" />
+              <h3 className="mt-4 font-serif text-lg text-stone-900">Email us</h3>
+              <p className="mt-2 text-sm text-stone-600">We&apos;re happy to help with any questions.</p>
+              <a
+                href={`mailto:${storeContact.email}`}
+                className="mt-4 inline-block break-all text-sm font-medium text-stone-900 transition-colors hover:text-amber-900"
+              >
+                {storeContact.email}
+              </a>
+            </article>
+          </div>
         </div>
       </section>
 

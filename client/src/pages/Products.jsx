@@ -545,7 +545,7 @@ export default function Products() {
 
             {/* Products Grid & Loading / Empty States */}
             {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
                 {[...Array(6)].map((_, i) => (
                   <div
                     key={i}
@@ -581,7 +581,7 @@ export default function Products() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
                   {products.map((p) => (
                     <ProductCard key={p._id} product={p} />
                   ))}

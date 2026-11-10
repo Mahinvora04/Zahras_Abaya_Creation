@@ -154,7 +154,7 @@ export default function ProductCard({ product }) {
         </div>
 
         {/* Product Info Section */}
-        <div className="p-4 space-y-2">
+        <div className="p-2.5 space-y-2 sm:p-4">
           {product.category && !isObjectId(product.category) && (
             <span className="text-[11px] tracking-widest uppercase text-amber-800/80 font-medium block">
               {product.category}
@@ -182,13 +182,13 @@ export default function ProductCard({ product }) {
       </div>
 
       {/* Price & Primary CTA Footer */}
-      <div className="px-4 pb-4 pt-1 flex items-center justify-between border-t border-stone-100 mt-2">
-        <div className="flex items-baseline gap-2">
-          <span className="text-base font-semibold text-stone-900">
+      <div className="mt-2 flex flex-col items-start gap-1 border-t border-stone-100 px-2.5 pb-3 pt-1 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:pb-4">
+        <div className="flex min-w-0 items-baseline gap-1 sm:gap-2">
+          <span className="text-sm font-semibold text-stone-900 sm:text-base">
             ₹{displayPrice?.toLocaleString('en-IN')}
           </span>
           {displayOriginalPrice && displayOriginalPrice > displayPrice && (
-            <span className="text-xs text-stone-400 line-through font-light">
+            <span className="whitespace-nowrap text-[10px] text-stone-400 line-through font-light sm:text-xs">
               ₹{displayOriginalPrice?.toLocaleString('en-IN')}
             </span>
           )}
@@ -197,7 +197,7 @@ export default function ProductCard({ product }) {
         <button
           onClick={handleAddToCart}
           disabled={!defaultVariant?.isAvailable}
-          className={`text-xs font-semibold tracking-wider transition-colors uppercase border-b pb-0.5 ${
+          className={`shrink-0 text-[10px] font-semibold tracking-wider transition-colors uppercase border-b pb-0.5 sm:text-xs ${
             isInCart 
               ? 'text-stone-900 border-stone-900'
               : 'text-amber-900 hover:text-stone-900 border-amber-900/40 hover:border-stone-900'

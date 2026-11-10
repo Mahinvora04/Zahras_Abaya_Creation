@@ -3,6 +3,7 @@ import { Mail, MapPin, Phone } from "lucide-react";
 
 import { Link } from "react-router-dom";
 import logo from "../assets/logo.png";
+import { storeContact } from "../config/storeContact";
 
 export default function Footer() {
 
@@ -80,25 +81,25 @@ export default function Footer() {
             <li className="flex items-start gap-3">
               <MapPin className="w-4 h-4 text-amber-300 mt-1 shrink-0" />
               <span className="text-sm text-stone-400">
-                33, GF, Seventh Heaven Complex, Opp Al-Burooj Tower, Sonal-Makraba Road, Ahmedabad - 51
+                {storeContact.address}
               </span>
             </li>
             <li className="flex items-center gap-3">
               <Phone className="w-4 h-4 text-amber-300 shrink-0" />
               <a
-                href="tel:+971501234567"
+                href={storeContact.phoneHref}
                 className="text-sm text-stone-400 hover:text-amber-300 transition-colors"
               >
-                +91 97243 73153
+                {storeContact.phone}
               </a>
             </li>
             <li className="flex items-center gap-3">
               <Mail className="w-4 h-4 text-amber-300 shrink-0" />
               <a
-                href="mailto:care@zahraabaya.com"
+                href={`mailto:${storeContact.email}`}
                 className="text-sm text-stone-400 hover:text-amber-300 transition-colors"
               >
-                care@zahraabaya.com
+                {storeContact.email}
               </a>
             </li>
           </ul>
